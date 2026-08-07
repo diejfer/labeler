@@ -1,0 +1,97 @@
+name: "Labeler XY + Servo"
+board: "ESP32 DevKit V1"
+
+# Configuracion inicial segura para pruebas:
+# 1 unidad de G-code equivale a 1 pulso STEP. Cuando se conozca la
+# transmision, reemplazar steps_per_mm por el valor mecanico real.
+stepping:
+  engine: RMT
+  idle_ms: 255
+  pulse_us: 4
+  dir_delay_us: 2
+  disable_delay_us: 0
+
+axes:
+  shared_stepper_disable_pin: NO_PIN
+
+  x:
+    steps_per_mm: 1.000
+    max_rate_mm_per_min: 12000.000
+    acceleration_mm_per_sec2: 200.000
+    max_travel_mm: 1000000.000
+    soft_limits: false
+    homing:
+      cycle: 0
+    motor0:
+      limit_neg_pin: NO_PIN
+      limit_pos_pin: NO_PIN
+      limit_all_pin: NO_PIN
+      hard_limits: false
+      pulloff_mm: 1.000
+      stepstick:
+        step_pin: gpio.26
+        direction_pin: gpio.27
+        disable_pin: gpio.25:high
+
+  y:
+    steps_per_mm: 1.000
+    max_rate_mm_per_min: 12000.000
+    acceleration_mm_per_sec2: 200.000
+    max_travel_mm: 1000000.000
+    soft_limits: false
+    homing:
+      cycle: 0
+    motor0:
+      limit_neg_pin: NO_PIN
+      limit_pos_pin: NO_PIN
+      limit_all_pin: NO_PIN
+      hard_limits: false
+      pulloff_mm: 1.000
+      stepstick:
+        step_pin: gpio.32
+        direction_pin: gpio.33
+        disable_pin: gpio.14:high
+
+  # FluidNC representa el recorrido de un eje sin homing entre -max_travel
+  # y 0. La interfaz traduce 0..180 grados a A-180..A0.
+  a:
+    steps_per_mm: 1.000
+    max_rate_mm_per_min: 3600.000
+    acceleration_mm_per_sec2: 180.000
+    max_travel_mm: 180.000
+    soft_limits: false
+    homing:
+      cycle: 0
+    motor0:
+      limit_neg_pin: NO_PIN
+      limit_pos_pin: NO_PIN
+      limit_all_pin: NO_PIN
+      hard_limits: false
+      pulloff_mm: 1.000
+      rc_servo:
+        output_pin: gpio.13
+        pwm_hz: 50
+        min_pulse_us: 1000
+        max_pulse_us: 2000
+        timer_ms: 20
+
+control:
+  safety_door_pin: NO_PIN
+  reset_pin: NO_PIN
+  feed_hold_pin: NO_PIN
+  cycle_start_pin: NO_PIN
+  macro0_pin: NO_PIN
+  macro1_pin: NO_PIN
+  macro2_pin: NO_PIN
+  macro3_pin: NO_PIN
+
+coolant:
+  flood_pin: NO_PIN
+  mist_pin: NO_PIN
+  delay_ms: 0
+
+probe:
+  pin: NO_PIN
+
+start:
+  must_home: false
