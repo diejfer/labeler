@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Labeler CNC</title>
+  <style>
+    body{margin:0;background:#0b1220;color:#edf2f8;font:16px system-ui,sans-serif}
+    #boot{max-width:620px;margin:12vh auto;padding:28px;background:#172238;border-radius:16px}
+    input,button{width:100%;box-sizing:border-box;padding:12px;margin-top:10px;border:0;border-radius:8px;font:inherit}
+    input{background:#25344d;color:#fff}button{background:#39cf8a;color:#07160f;font-weight:700;cursor:pointer}
+    small{display:block;margin-top:14px;color:#aab8cc;line-height:1.45}.error{color:#ff9b9b}
+  </style>
+</head>
+<body>
+  <div id="boot">
+    <h1>Labeler CNC</h1>
+    <p id="message">Cargando la interfaz...</p>
+    <form id="assetForm" hidden>
+      <label for="assetBase">URL publicada en GitHub Pages</label>
+      <input id="assetBase" placeholder="https://usuario.github.io/repositorio">
+      <button>Guardar y cargar</button>
+      <small>Esta URL queda guardada solamente en este navegador. También puede indicarse con <code>?assets=https://...</code>.</small>
+    </form>
+  </div>
+  <script>
+  (() => {
+    const params = new URLSearchParams(location.search);
+    const stored = localStorage.getItem('labeler.assetBase');
+    const base = (params.get('assets') || stored || '').replace(/\/$/, '');
+    const form = document.querySelector('#assetForm');
+    const message = document.querySelector('#message');
+
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      const value = document.querySelector('#assetBase').value.trim().replace(/\/$/, '');
+      if (!value.startsWith('https://')) return;
+      localStorage.setItem('labeler.assetBase', value);
+      location.reload();
+    });
+
+    if (!base) {
+      message.textContent = 'Configurá una vez la ubicación de los assets.';
+      form.hidden = false;
+      return;
+    }
+
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = `${base}/app.css`;
+    document.head.append(css);
+
+    const script = document.createElement('script');
+    // Script clasico: puede cargarse desde otro origen sin exigir CORS de modulos.
+    script.src = `${base}/app.js`;
+    script.onerror = () => {
+      message.className = 'error';
+      message.textContent = 'No se pudieron cargar los assets. Verificá la URL o la conexión a Internet.';
+      document.querySelector('#assetBase').value = base;
+      form.hidden = false;
+    };
+    document.body.append(script);
+  })();
+  </script>
+</body>
+</html>

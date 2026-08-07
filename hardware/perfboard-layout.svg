@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="850" viewBox="0 0 1400 850">
+  <defs>
+    <pattern id="holes" width="20" height="20" patternUnits="userSpaceOnUse">
+      <circle cx="10" cy="10" r="3.2" fill="#d7b96a" stroke="#755b20" stroke-width="1"/>
+    </pattern>
+    <style>
+      text{font-family:Arial,sans-serif;fill:#172033}.title{font-size:26px;font-weight:bold}.sub{font-size:14px}.tiny{font-size:10px}.label{font-size:12px;font-weight:bold}.part{fill:#e9eef5;stroke:#24354d;stroke-width:2}.driver{fill:#d94b48;stroke:#71211f;stroke-width:3}.header{fill:#263445;stroke:#0d1722;stroke-width:2}.pin{fill:#d8dde4;stroke:#172033;stroke-width:1}.wire{fill:none;stroke-width:4;stroke-linejoin:round;stroke-linecap:round;opacity:.88}.sig{stroke:#1778d3}.gnd{stroke:#222}.v12{stroke:#e53935}.v5{stroke:#ff8c1a}.v33{stroke:#b12bc9}.enable{stroke:#18a36b}.stop{stroke:#d10072}.motor{stroke:#6a4bbc}.pwm{stroke:#00a3a3}.note{font-size:13px}.coord{font-size:9px;fill:#526174}
+    </style>
+  </defs>
+
+  <rect width="1400" height="850" fill="#f4f6f9"/>
+  <text x="45" y="38" class="title">Placa de expansión ESP32 + 2 × A4988 — lado de componentes</text>
+  <text x="45" y="60" class="sub">Matriz confirmada: 50 columnas × 32 filas, paso 2,54 mm. Puentes dibujados como cable aislado.</text>
+
+  <!-- Board, hole (col,row) center = (50+20*col, 60+20*row) -->
+  <rect x="60" y="80" width="1000" height="640" rx="8" fill="#76a874" stroke="#315d36" stroke-width="5"/>
+  <rect x="60" y="80" width="1000" height="640" fill="url(#holes)"/>
+
+  <!-- coordinate labels -->
+  <g class="coord">
+    <text x="67" y="75">1</text><text x="247" y="75">10</text><text x="447" y="75">20</text><text x="647" y="75">30</text><text x="847" y="75">40</text><text x="1042" y="75">50</text>
+    <text x="43" y="107">1</text><text x="37" y="287">10</text><text x="37" y="487">20</text><text x="37" y="687">30</text><text x="37" y="727">32</text>
+  </g>
+
+  <!-- Wires, routed under board; endpoints follow the documented coordinates -->
+  <!-- power buses -->
+  <path class="wire v12" d="M640 180 H300 V160 H280 M640 180 H540 V160 H520"/>
+  <path class="wire v5" d="M640 220 H1020 V500 H640 M640 220 H100 V380"/>
+  <path class="wire v33" d="M100 400 H180 V300 H300 M180 300 H440 V300 H540 M180 300 V260 H200 M440 300 V260 H460"/>
+  <path class="wire gnd" d="M100 420 H140 V680 H600 V600 H640 M140 420 V340 H300 M140 340 H540 M640 200 H580 V340 H540 M580 340 H300"/>
+
+  <!-- driver configuration -->
+  <path class="wire gnd" d="M200 200 H170 V240 H200 M170 240 V260 H200"/>
+  <path class="wire gnd" d="M460 200 H430 V240 H460 M430 240 V260 H460"/>
+  <path class="wire v33" d="M200 280 H220 V300 H200 M460 280 H480 V300 H460"/>
+  <path class="wire enable" d="M100 520 H160 V180 H200 M160 180 H460"/>
+
+  <!-- STEP/DIR -->
+  <path class="wire sig" d="M100 440 H150 V300 H200"/>
+  <path class="wire sig" d="M100 460 H130 V320 H200"/>
+  <path class="wire sig" d="M100 480 H410 V300 H460"/>
+  <path class="wire sig" d="M100 500 H390 V320 H460"/>
+
+  <!-- motor outputs -->
+  <path class="wire motor" d="M300 220 H340 V360"/>
+  <path class="wire motor" d="M300 240 H360 V380 H340"/>
+  <path class="wire motor" d="M300 260 H380 V400 H340"/>
+  <path class="wire motor" d="M300 280 H400 V420 H340"/>
+  <path class="wire motor" d="M540 220 H580 V360 H600"/>
+  <path class="wire motor" d="M540 240 H560 V380 H600"/>
+  <path class="wire motor" d="M540 260 H580 V400 H600"/>
+  <path class="wire motor" d="M540 280 H560 V420 H600"/>
+
+  <!-- servo and stop -->
+  <path class="wire pwm" d="M100 540 H620 V540 H640"/>
+  <path class="wire stop" d="M100 560 H620 V640 H640"/>
+  <path class="wire gnd" d="M640 660 H600 V680 M640 500 H600"/>
+
+  <!-- D1 -->
+  <rect class="driver" x="185" y="165" width="130" height="175" rx="5"/>
+  <text x="220" y="190" fill="white" style="font-weight:bold;font-size:16px">D1 A4988</text>
+  <text x="220" y="208" fill="white" class="tiny">CINTA • EN/VMOT ARRIBA</text>
+  <g class="tiny">
+    <text x="205" y="184">EN</text><text x="280" y="184">VMOT</text>
+    <text x="198" y="204">MS1</text><text x="284" y="204">GND</text>
+    <text x="198" y="224">MS2</text><text x="288" y="224">2B</text>
+    <text x="198" y="244">MS3</text><text x="288" y="244">2A</text>
+    <text x="190" y="264">RST</text><text x="288" y="264">1A</text>
+    <text x="190" y="284">SLP</text><text x="288" y="284">1B</text>
+    <text x="188" y="304">STEP</text><text x="282" y="304">VDD</text>
+    <text x="190" y="324">DIR</text><text x="284" y="324">GND</text>
+  </g>
+
+  <!-- D2 -->
+  <rect class="driver" x="445" y="165" width="130" height="175" rx="5"/>
+  <text x="480" y="190" fill="white" style="font-weight:bold;font-size:16px">D2 A4988</text>
+  <text x="470" y="208" fill="white" class="tiny">TRANSV. • EN/VMOT ARRIBA</text>
+  <g class="tiny">
+    <text x="465" y="184">EN</text><text x="540" y="184">VMOT</text>
+    <text x="458" y="204">MS1</text><text x="544" y="204">GND</text>
+    <text x="458" y="224">MS2</text><text x="548" y="224">2B</text>
+    <text x="458" y="244">MS3</text><text x="548" y="244">2A</text>
+    <text x="450" y="264">RST</text><text x="548" y="264">1A</text>
+    <text x="450" y="284">SLP</text><text x="548" y="284">1B</text>
+    <text x="448" y="304">STEP</text><text x="542" y="304">VDD</text>
+    <text x="450" y="324">DIR</text><text x="544" y="324">GND</text>
+  </g>
+
+  <!-- headers -->
+  <rect class="header" x="82" y="370" width="36" height="210" rx="4"/><text x="72" y="360" class="label">J1 ESP32</text>
+  <g class="tiny" fill="white">
+    <text x="120" y="384">VIN 5V</text><text x="120" y="404">3V3</text><text x="120" y="424">GND</text>
+    <text x="120" y="444">GPIO16 STEP CINTA</text><text x="120" y="464">GPIO17 DIR CINTA</text>
+    <text x="120" y="484">GPIO18 STEP X</text><text x="120" y="504">GPIO19 DIR X</text>
+    <text x="120" y="524">GPIO22 ENABLE</text><text x="120" y="544">GPIO21 SERVO</text><text x="120" y="564">GPIO32 STOP</text>
+  </g>
+
+  <rect class="header" x="622" y="165" width="36" height="70" rx="4"/><text x="670" y="185" class="label">J2 ATX</text><text x="670" y="203" class="tiny">12V / GND / 5V</text>
+  <rect class="header" x="322" y="350" width="36" height="90" rx="4"/><text x="305" y="465" class="label">J3 MOTOR CINTA</text>
+  <rect class="header" x="582" y="350" width="36" height="90" rx="4"/><text x="565" y="465" class="label">J4 MOTOR X</text>
+  <rect class="header" x="622" y="485" width="36" height="70" rx="4"/><text x="670" y="515" class="label">J5 SERVO</text><text x="670" y="535" class="tiny">GND / 5V / PWM</text>
+  <rect class="header" x="622" y="625" width="36" height="50" rx="4"/><text x="670" y="647" class="label">J6 STOP NC</text>
+
+  <!-- capacitors -->
+  <circle cx="340" cy="180" r="18" fill="#203e74" stroke="#102044" stroke-width="2"/><text x="330" y="185" fill="white" class="tiny">C1</text><text x="365" y="180" class="tiny">100µF/25V</text>
+  <circle cx="600" cy="180" r="18" fill="#203e74" stroke="#102044" stroke-width="2"/><text x="590" y="185" fill="white" class="tiny">C2</text><text x="620" y="160" class="tiny">100µF/25V</text>
+  <circle cx="580" cy="520" r="20" fill="#284e88" stroke="#102044" stroke-width="2"/><text x="568" y="525" fill="white" class="tiny">C5</text><text x="535" y="555" class="tiny">470–1000µF/10V</text>
+
+  <!-- unused area -->
+  <rect x="680" y="100" width="360" height="600" fill="#fff" opacity=".18" stroke="#315d36" stroke-dasharray="8 6"/>
+  <text x="790" y="390" style="font-size:22px;fill:#315d36">ÁREA LIBRE</text>
+  <text x="735" y="418" class="note">El circuito cabe en ~27 × 24 agujeros</text>
+
+  <!-- legend -->
+  <g transform="translate(1090,95)">
+    <rect width="275" height="480" rx="12" fill="white" stroke="#ccd4df" stroke-width="2"/>
+    <text x="20" y="35" class="label" style="font-size:18px">Leyenda de puentes</text>
+    <line x1="20" y1="65" x2="75" y2="65" class="wire v12"/><text x="90" y="70" class="note">+12 V potencia</text>
+    <line x1="20" y1="95" x2="75" y2="95" class="wire v5"/><text x="90" y="100" class="note">+5 V ESP32/servo</text>
+    <line x1="20" y1="125" x2="75" y2="125" class="wire v33"/><text x="90" y="130" class="note">3,3 V lógica</text>
+    <line x1="20" y1="155" x2="75" y2="155" class="wire gnd"/><text x="90" y="160" class="note">GND común</text>
+    <line x1="20" y1="185" x2="75" y2="185" class="wire sig"/><text x="90" y="190" class="note">STEP / DIR</text>
+    <line x1="20" y1="215" x2="75" y2="215" class="wire enable"/><text x="90" y="220" class="note">ENABLE compartido</text>
+    <line x1="20" y1="245" x2="75" y2="245" class="wire motor"/><text x="90" y="250" class="note">Bobinas motores</text>
+    <line x1="20" y1="275" x2="75" y2="275" class="wire pwm"/><text x="90" y="280" class="note">PWM servo</text>
+    <line x1="20" y1="305" x2="75" y2="305" class="wire stop"/><text x="90" y="310" class="note">Entrada STOP</text>
+    <text x="20" y="350" class="label">Montaje</text>
+    <text x="20" y="377" class="note">• Vista desde componentes.</text>
+    <text x="20" y="402" class="note">• Puentes por debajo.</text>
+    <text x="20" y="427" class="note">• Usar cable aislado.</text>
+    <text x="20" y="452" class="note">• Verificar etiquetas A4988.</text>
+  </g>
+
+  <text x="60" y="770" class="note">IMPORTANTE: C1 y C2 van físicamente junto a VMOT/GND. No insertar drivers hasta medir 12 V, 5 V, 3,3 V y comprobar ausencia de cortos.</text>
+  <text x="60" y="796" class="note">El botón STOP es una detención lógica por GPIO32; no sustituye un corte eléctrico de seguridad.</text>
+</svg>
