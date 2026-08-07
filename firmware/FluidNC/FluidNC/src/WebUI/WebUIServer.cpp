@@ -4,6 +4,8 @@
 #include "Machine/MachineConfig.h"
 #include "Serial.h"    // is_realtime_command()
 #include "Settings.h"  // settings_execute_line()
+#include "Report.h"
+#include "System.h"
 
 #include "WebUIServer.h"
 
@@ -107,6 +109,13 @@ namespace WebUI {
         _webserver    = new AsyncWebServer(_port);
         _headerFilter = new AsyncHeaderFreeMiddleware();
 
+        // The UI is served from GitHub Pages and explicitly requests local
+        // network access. Keep the allowed origin narrow instead of using '*'.
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "https://diejfer.github.io");
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Headers", "Content-Type");
+        DefaultHeaders::Instance().addHeader("Access-Control-Allow-Private-Network", "true");
+
         //here the list of headers to be recorded
         _headerFilter->keep("Accept");
         _headerFilter->keep("Accept-Encoding");
@@ -183,6 +192,13 @@ namespace WebUI {
         // Persistent mechanical settings used by the Labeler web client.
         _webserver->on("/api/labeler/config", HTTP_GET, handleLabelerConfigGet);
         _webserver->on("/api/labeler/config", HTTP_POST, handleLabelerConfigPost);
+        _webserver->on("/api/labeler/config", HTTP_OPTIONS, handleLabelerOptions);
+        _webserver->on("/api/labeler/command", HTTP_GET, handleLabelerCommand);
+        _webserver->on("/api/labeler/command", HTTP_OPTIONS, handleLabelerOptions);
+        _webserver->on("/api/labeler/status", HTTP_GET, handleLabelerStatus);
+        _webserver->on("/api/labeler/status", HTTP_OPTIONS, handleLabelerOptions);
+        _webserver->on("/api/labeler/action", HTTP_POST, handleLabelerAction);
+        _webserver->on("/api/labeler/action", HTTP_OPTIONS, handleLabelerOptions);
 
         //LocalFS
         _webserver->on("/files", HTTP_ANY, handleFileList, LocalFSFileupload);
@@ -1496,6 +1512,57 @@ namespace WebUI {
 
     void WebUI_Server::handleLabelerConfigGet(AsyncWebServerRequest* request) {
         sendLabelerConfig(request, readLabelerConfig());
+    }
+
+    void WebUI_Server::handleLabelerOptions(AsyncWebServerRequest* request) {
+        request->send(204);
+    }
+
+    void WebUI_Server::handleLabelerCommand(AsyncWebServerRequest* request) {
+        if (!request->hasParam("cmd")) {
+            request->send(400, "application/json", "{\"error\":\"Falta el comando\"}");
+            return;
+        }
+        String command = request->getParam("cmd")->value();
+        if (command.length() == 0 || command.length() > 240 || command.indexOf('\n') >= 0 || command.indexOf('\r') >= 0) {
+            request->send(400, "application/json", "{\"error\":\"Comando invalido\"}");
+            return;
+        }
+        synchronousCommand(request, command.c_str(), false, AuthenticationLevel::LEVEL_ADMIN, true);
+    }
+
+    void WebUI_Server::handleLabelerStatus(AsyncWebServerRequest* request) {
+        float* position = get_mpos();
+        char json[220];
+        snprintf(json,
+                 sizeof(json),
+                 "{\"hostname\":\"labeler\",\"state\":\"%s\",\"x\":%.4f,\"y\":%.4f,\"a\":%.4f}",
+                 state_name(),
+                 position[0],
+                 position[1],
+                 position[3]);
+        AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
+        response->addHeader("Cache-Control", "no-store");
+        request->send(response);
+    }
+
+    void WebUI_Server::handleLabelerAction(AsyncWebServerRequest* request) {
+        if (!request->hasParam("action", true)) {
+            request->send(400, "application/json", "{\"error\":\"Falta la accion\"}");
+            return;
+        }
+        String action = request->getParam("action", true)->value();
+        if (action == "pause") {
+            protocol_send_event(&feedHoldEvent);
+        } else if (action == "resume") {
+            protocol_send_event(&cycleStartEvent);
+        } else if (action == "reset") {
+            protocol_send_event(&rtResetEvent);
+        } else {
+            request->send(400, "application/json", "{\"error\":\"Accion desconocida\"}");
+            return;
+        }
+        request->send(200, "application/json", "{\"ok\":true}");
     }
 
     void WebUI_Server::handleLabelerConfigPost(AsyncWebServerRequest* request) {

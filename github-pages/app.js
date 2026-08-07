@@ -1,41 +1,70 @@
+const CONTROLLER_URL = 'http://labeler.local';
+
+function localFetch(path, options = {}) {
+  return fetch(`${CONTROLLER_URL}${path}`, {
+    cache: 'no-store',
+    mode: 'cors',
+    targetAddressSpace: 'local',
+    ...options
+  });
+}
+
 class FluidNCClient extends EventTarget {
   constructor() {
     super();
-    this.socket = null;
+    this.online = false;
     this.queue = [];
     this.pending = null;
     this.sent = 0;
     this.total = 0;
-    this.rxBuffer = '';
     this.statusTimer = null;
   }
 
   emit(name, detail = {}) { this.dispatchEvent(new CustomEvent(name, { detail })); }
 
-  connect() {
-    if (location.protocol === 'https:') throw new Error('Abrí esta aplicación desde la dirección HTTP del ESP32.');
+  async connect() {
     this.disconnect();
-    this.socket = new WebSocket(`ws://${location.host}/`);
-    this.socket.binaryType = 'arraybuffer';
-    this.socket.onopen = () => {
+    try {
+      await this.pollStatus();
+      this.online = true;
       this.emit('connection', { online: true });
-      this.statusTimer = setInterval(() => this.realtime('?'), 500);
-      this.realtime('?');
-    };
-    this.socket.onclose = () => {
-      clearInterval(this.statusTimer);
-      this.pending = null;
+      this.statusTimer = setInterval(() => this.pollStatus(), 750);
+    } catch (error) {
+      this.online = false;
       this.emit('connection', { online: false });
-    };
-    this.socket.onerror = () => this.emit('log', { text: 'Error de WebSocket' });
-    this.socket.onmessage = event => this.consume(typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data));
+      throw new Error(`No se encontró labeler.local. ${error.message}`);
+    }
   }
 
-  disconnect() { clearInterval(this.statusTimer); if (this.socket) this.socket.close(); this.socket = null; }
-  realtime(command) { if (this.socket?.readyState === WebSocket.OPEN) this.socket.send(command); }
+  disconnect() { clearInterval(this.statusTimer); this.statusTimer = null; this.online = false; }
+
+  async pollStatus() {
+    try {
+      const response = await localFetch('/api/labeler/status');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const status = await response.json();
+      this.emit('status', { state:status.state, positions:[status.x,status.y,0,status.a] });
+      return status;
+    } catch (error) {
+      if (this.online) {
+        this.online = false;
+        this.emit('connection', { online:false });
+      }
+      throw error;
+    }
+  }
+
+  async action(action) {
+    const response = await localFetch('/api/labeler/action', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+      body:new URLSearchParams({ action })
+    });
+    if (!response.ok) throw new Error((await response.text()) || `HTTP ${response.status}`);
+  }
 
   run(program, purpose = 'program') {
-    if (this.socket?.readyState !== WebSocket.OPEN) throw new Error('El controlador no está conectado.');
+    if (!this.online) throw new Error('El controlador no está conectado.');
     if (this.pending || this.queue.length) throw new Error('Ya hay un envío en curso.');
     const lines = program.split(/\r?\n/).map(line => line.replace(/;.*$/, '').trim()).filter(Boolean);
     if (!lines.length) throw new Error('No hay comandos para enviar.');
@@ -48,8 +77,8 @@ class FluidNCClient extends EventTarget {
     this.pump();
   }
 
-  pump() {
-    if (this.pending || !this.queue.length || this.socket?.readyState !== WebSocket.OPEN) {
+  async pump() {
+    if (this.pending || !this.queue.length || !this.online) {
       if (!this.pending && !this.queue.length && this.total) {
         const purpose = this.purpose;
         this.total = 0;
@@ -58,58 +87,31 @@ class FluidNCClient extends EventTarget {
       return;
     }
     this.pending = this.queue.shift();
-    this.socket.send(`${this.pending}\n`);
     this.emit('log', { text: `> ${this.pending}` });
+    try {
+      const response = await localFetch(`/api/labeler/command?cmd=${encodeURIComponent(this.pending)}`);
+      const text = (await response.text()).trim();
+      if (text) this.emit('log', { text });
+      if (!response.ok || /(^|\n)(error:|ALARM:)/i.test(text)) throw new Error(text || `HTTP ${response.status}`);
+      this.pending = null;
+      this.sent++;
+      this.emit('progress', { sent:this.sent, total:this.total, purpose:this.purpose });
+      this.pump();
+    } catch (error) {
+      this.pending = null;
+      this.queue = [];
+      this.total = 0;
+      this.emit('failure', { response:error.message, purpose:this.purpose });
+    }
   }
 
   cancel() {
     this.queue = [];
     this.pending = null;
     this.total = 0;
-    this.realtime('\x18');
+    this.action('reset').catch(error => this.emit('log', { text:error.message }));
     this.emit('progress', { sent: 0, total: 0 });
   }
-
-  consume(chunk) {
-    this.rxBuffer += chunk.replace(/\r/g, '');
-    const lines = this.rxBuffer.split('\n');
-    this.rxBuffer = lines.pop() || '';
-    for (const line of lines) this.consumeLine(line.trim());
-    if (this.rxBuffer.startsWith('<') && this.rxBuffer.endsWith('>')) {
-      this.consumeLine(this.rxBuffer);
-      this.rxBuffer = '';
-    }
-  }
-
-  consumeLine(line) {
-    if (!line || line.startsWith('PING') || /^(CURRENT_ID|currentID|ACTIVE_ID|activeID):/.test(line)) return;
-    if (line.startsWith('<') && line.endsWith('>')) { this.emit('status', parseStatus(line)); return; }
-    this.emit('log', { text: line });
-    if (line === 'ok' || line.startsWith('error:') || line.startsWith('ALARM:')) {
-      const failed = line !== 'ok';
-      this.pending = null;
-      this.sent++;
-      this.emit('progress', { sent: this.sent, total: this.total, failed, purpose: this.purpose });
-      if (failed) {
-        this.queue = [];
-        this.total = 0;
-        this.emit('failure', { response: line, purpose: this.purpose });
-      } else this.pump();
-    }
-  }
-}
-
-function parseStatus(line) {
-  const fields = line.slice(1, -1).split('|');
-  const status = { state: fields.shift() || 'Unknown', positions: [] };
-  for (const field of fields) {
-    const separator = field.indexOf(':');
-    const key = field.slice(0, separator);
-    const value = field.slice(separator + 1);
-    if (key === 'MPos' || key === 'WPos') status.positions = value.split(',').map(Number);
-    if (key === 'FS') [status.feed] = value.split(',').map(Number);
-  }
-  return status;
 }
 
 const FONT = {
@@ -259,7 +261,7 @@ function updatePreview() {
 
 async function loadConfig() {
   try {
-    const response = await fetch('/api/labeler/config', { cache:'no-store' });
+    const response = await localFetch('/api/labeler/config');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     mechanical = { ...DEFAULT_CONFIG, ...await response.json() };
   } catch (error) { log(`No se pudo leer la configuración: ${error.message}`); }
@@ -302,10 +304,6 @@ client.addEventListener('connection', event => {
   $('#dot').classList.toggle('online', online);
   $('#connectionText').textContent = online ? 'Conectado' : 'Desconectado';
   $('#connect').textContent = online ? 'Reconectar' : 'Conectar';
-  if (online) {
-    try { client.run(runtimeConfigGcode(), 'configuration'); }
-    catch (error) { log(error.message); }
-  }
 });
 client.addEventListener('log', event => log(event.detail.text));
 client.addEventListener('status', event => {
@@ -326,11 +324,19 @@ client.addEventListener('progress', event => {
 client.addEventListener('complete', event => log(event.detail.purpose === 'configuration' ? 'Parámetros mecánicos aplicados.' : 'Programa completado.'));
 client.addEventListener('failure', event => log(`Envío interrumpido: ${event.detail.response}`));
 
-$('#connect').onclick = () => { try { client.connect(); } catch (error) { log(error.message); } };
+async function connectController() {
+  try {
+    await client.connect();
+    await loadConfig();
+    client.run(runtimeConfigGcode(), 'configuration');
+  } catch (error) { log(error.message); }
+}
+
+$('#connect').onclick = connectController;
 $('#generate').onclick = () => { try { $('#program').value = buildLabel().gcode; } catch (error) { log(error.message); } };
 $('#print').onclick = () => { try { const job=buildLabel(); $('#program').value=job.gcode; client.run(job.gcode,'label'); } catch (error) { log(error.message); } };
-$('#pause').onclick = () => client.realtime('!');
-$('#resume').onclick = () => client.realtime('~');
+$('#pause').onclick = () => client.action('pause').catch(error => log(error.message));
+$('#resume').onclick = () => client.action('resume').catch(error => log(error.message));
 $('#reset').onclick = () => client.cancel();
 $('#unlock').onclick = () => { try { client.run('$X','manual'); } catch(error) { log(error.message); } };
 $('#penUp').onclick = () => { try { client.run(`G90\nG0 A${servoAxis(mechanical.servoUpAngle)}`,'manual'); } catch(error) { log(error.message); } };
@@ -343,17 +349,19 @@ $('#configForm').onsubmit = async event => {
   const formData = new FormData(event.currentTarget);
   $('#configMessage').textContent = 'Guardando...';
   try {
-    const response = await fetch('/api/labeler/config', { method:'POST', body:new URLSearchParams(formData) });
+    const response = await localFetch('/api/labeler/config', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+      body:new URLSearchParams(formData)
+    });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error || `HTTP ${response.status}`);
     mechanical = { ...mechanical, ...result };
     $('#configMessage').textContent = 'Configuración guardada en el ESP32.';
     updatePreview();
-    if (client.socket?.readyState === WebSocket.OPEN) client.run(runtimeConfigGcode(),'configuration');
+    if (client.online) client.run(runtimeConfigGcode(),'configuration');
   } catch (error) { $('#configMessage').textContent = `Error: ${error.message}`; }
 };
 
-loadConfig().then(() => {
-  updatePreview();
-  client.connect();
-});
+updatePreview();
+connectController();

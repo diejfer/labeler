@@ -796,7 +796,8 @@ namespace WebUI {
                 return false;
             }
             //Hostname needs to be set before mode to take effect
-            WiFi.setHostname(_hostname->get());
+            // Labeler uses a fixed discovery address for its public web client.
+            WiFi.setHostname("labeler");
             WiFi.mode(WIFI_STA);
             WiFi.setMinSecurity(static_cast<wifi_auth_mode_t>(_sta_min_security->get()));
             WiFi.setScanMethod(_fast_scan->get() ? WIFI_FAST_SCAN : WIFI_ALL_CHANNEL_SCAN);
@@ -994,7 +995,7 @@ namespace WebUI {
 
         void init() {
             _sta_ssid    = new StringSetting("Station SSID", WEBSET, WA, "ESP100", "Sta/SSID", "", MIN_SSID_LENGTH, MAX_SSID_LENGTH);
-            _hostname    = new HostnameSetting("Hostname", "ESP112", "Hostname", "fluidnc");
+            _hostname    = new HostnameSetting("Hostname", "ESP112", "Hostname", "labeler");
             _ap_channel  = new IntSetting("AP Channel", WEBSET, WA, "ESP108", "AP/Channel", 1, 1, 14);
             _ap_ip       = new IPaddrSetting("AP Static IP", WEBSET, WA, "ESP107", "AP/IP", "192.168.0.1");
             _ap_password = new PasswordSetting("AP Password", "ESP106", "AP/Password", "12345678");
