@@ -10,11 +10,16 @@ firmware sin planificador CNC.
 
 - `firmware/FluidNC`: código fuente fijado a FluidNC v4.0.3.
 - `firmware/esp32-data/config.yaml`: configuración de los ejes X, Y y A.
-- `firmware/esp32-data/index.html`: cargador web que se aloja en el ESP32.
 - `github-pages`: assets HTML, CSS y JavaScript para GitHub Pages.
 
-La publicación automática de esos assets queda configurada en GitHub Actions
-para `https://diejfer.github.io/labeler`.
+La aplicación se publica automáticamente en
+`https://diejfer.github.io/labeler`, busca `http://labeler.local` mediante las
+APIs REST y no depende de archivos web almacenados en el ESP32.
+
+El navegador debe soportar Local Network Access y conceder permiso a GitHub
+Pages para buscar dispositivos en la red local. La implementación apunta a
+Chrome/Edge 142 o posterior. El ESP32 y el navegador deben estar en la misma
+red Wi-Fi con mDNS habilitado.
 
 ## Aplicación de etiquetas
 
@@ -89,8 +94,7 @@ platformio run -e wifi
 platformio run -e wifi -t upload
 ```
 
-Para construir y cargar el sistema de archivos con `config.yaml` e
-`index.html`:
+Para construir y cargar el sistema de archivos con `config.yaml`:
 
 ```powershell
 platformio run -e wifi -t buildfs

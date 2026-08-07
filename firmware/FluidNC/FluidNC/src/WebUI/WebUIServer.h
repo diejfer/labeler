@@ -99,6 +99,10 @@ namespace WebUI {
         static void        handleDidRestart(AsyncWebServerRequest* request);
         static void        handleLabelerConfigGet(AsyncWebServerRequest* request);
         static void        handleLabelerConfigPost(AsyncWebServerRequest* request);
+        static void        handleLabelerCommand(AsyncWebServerRequest* request);
+        static void        handleLabelerStatus(AsyncWebServerRequest* request);
+        static void        handleLabelerAction(AsyncWebServerRequest* request);
+        static void        handleLabelerOptions(AsyncWebServerRequest* request);
         static void LocalFSFileupload(AsyncWebServerRequest* request, String filename, size_t index, uint8_t* data, size_t len, bool final);
         static void handleFileList(AsyncWebServerRequest* request);
         static void handleUpdate(AsyncWebServerRequest* request);
