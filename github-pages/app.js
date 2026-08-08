@@ -213,29 +213,7 @@ class FluidNCClient extends EventTarget {
   }
 }
 
-const FONT = {
-  'A':['01110','10001','10001','11111','10001','10001','10001'],'B':['11110','10001','10001','11110','10001','10001','11110'],
-  'C':['01111','10000','10000','10000','10000','10000','01111'],'D':['11110','10001','10001','10001','10001','10001','11110'],
-  'E':['11111','10000','10000','11110','10000','10000','11111'],'F':['11111','10000','10000','11110','10000','10000','10000'],
-  'G':['01111','10000','10000','10111','10001','10001','01110'],'H':['10001','10001','10001','11111','10001','10001','10001'],
-  'I':['11111','00100','00100','00100','00100','00100','11111'],'J':['00111','00010','00010','00010','10010','10010','01100'],
-  'K':['10001','10010','10100','11000','10100','10010','10001'],'L':['10000','10000','10000','10000','10000','10000','11111'],
-  'M':['10001','11011','10101','10101','10001','10001','10001'],'N':['10001','11001','10101','10011','10001','10001','10001'],
-  'O':['01110','10001','10001','10001','10001','10001','01110'],'P':['11110','10001','10001','11110','10000','10000','10000'],
-  'Q':['01110','10001','10001','10001','10101','10010','01101'],'R':['11110','10001','10001','11110','10100','10010','10001'],
-  'S':['01111','10000','10000','01110','00001','00001','11110'],'T':['11111','00100','00100','00100','00100','00100','00100'],
-  'U':['10001','10001','10001','10001','10001','10001','01110'],'V':['10001','10001','10001','10001','10001','01010','00100'],
-  'W':['10001','10001','10001','10101','10101','11011','10001'],'X':['10001','10001','01010','00100','01010','10001','10001'],
-  'Y':['10001','10001','01010','00100','00100','00100','00100'],'Z':['11111','00001','00010','00100','01000','10000','11111'],
-  '0':['01110','10001','10011','10101','11001','10001','01110'],'1':['00100','01100','00100','00100','00100','00100','01110'],
-  '2':['01110','10001','00001','00010','00100','01000','11111'],'3':['11110','00001','00001','01110','00001','00001','11110'],
-  '4':['00010','00110','01010','10010','11111','00010','00010'],'5':['11111','10000','10000','11110','00001','00001','11110'],
-  '6':['01110','10000','10000','11110','10001','10001','01110'],'7':['11111','00001','00010','00100','01000','01000','01000'],
-  '8':['01110','10001','10001','01110','10001','10001','01110'],'9':['01110','10001','10001','01111','00001','00001','01110'],
-  ' ':['00000','00000','00000','00000','00000','00000','00000'],'-':['00000','00000','00000','11111','00000','00000','00000'],
-  '.':['00000','00000','00000','00000','00000','00110','00110'],'/':['00001','00010','00010','00100','01000','01000','10000'],
-  ':':['00000','00110','00110','00000','00110','00110','00000'],'?':['01110','10001','00001','00010','00100','00000','00100']
-};
+const VECTOR_FONT = window.LABELER_VECTOR_FONT;
 
 const DEFAULT_CONFIG = {
   xStepsPerMm:80, yStepsPerMm:80, xMaxSpeedMmS:40, yMaxSpeedMmS:25,
@@ -265,7 +243,7 @@ document.body.innerHTML = `
     <div class="field" id="customWidthField" hidden><label>Ancho particular (mm)</label><input id="tapeWidth" type="number" min="4" max="100" step="0.1" value="12"></div>
     <div class="field"><label>Formato</label><select id="labelFormat"><option value="one">Un renglón</option><option value="two">Dos renglones</option></select></div>
   </div><div class="field"><label>Renglón 1</label><input id="line1" maxlength="40" value="ETIQUETA"></div><div class="field" id="line2Field" hidden><label>Renglón 2</label><input id="line2" maxlength="40" value="SEGUNDO RENGLON"></div></section>
-  <section class="panel"><h2>Vista previa</h2><div id="tapePreview" class="tape-preview"><span id="preview1"></span><span id="preview2"></span></div><div class="label-info"><span>Ancho: <strong id="widthInfo">12 mm</strong></span><span>Largo estimado: <strong id="lengthInfo">--</strong></span></div></section>
+  <section class="panel"><h2>Vista previa vectorial</h2><div id="tapePreview" class="tape-preview"></div><div class="label-info"><span>Ancho: <strong id="widthInfo">12 mm</strong></span><span>Largo estimado: <strong id="lengthInfo">--</strong></span></div></section>
   <section class="panel wide"><h2>Programa de impresión</h2><textarea id="program" spellcheck="false"></textarea><div class="progress"><div id="progressBar"></div></div><p id="progressText" class="muted">0 / 0 líneas</p><div class="actions"><button id="generate">Generar G-code</button><button id="print">Imprimir etiqueta</button><button id="pause" class="warn">Pausar</button><button id="resume" class="secondary">Continuar</button><button id="reset" class="danger">Detener</button></div></section>
 </div></section>
 
@@ -303,28 +281,23 @@ document.body.innerHTML = `
 function tapeWidth() { return $('#tapePreset').value === 'custom' ? number('#tapeWidth') : Number($('#tapePreset').value); }
 
 function textMetrics(text, scale) {
-  const chars = [...text];
-  return Math.max(0, chars.length * 5 * scale + Math.max(0, chars.length - 1) * mechanical.glyphSpacingMm);
+  const normalized = [...text.toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')];
+  return normalized.reduce((width, rawChar, index) => {
+    const glyph = VECTOR_FONT[rawChar] || VECTOR_FONT['?'];
+    return width + glyph.advance * scale + (index ? mechanical.glyphSpacingMm : 0);
+  }, 0);
 }
 
-function rowStrokes(text, yBottom, scale, xOffset) {
-  const strokes = [];
+function rowPaths(text, yBottom, scale, xOffset) {
+  const paths = [];
   let cursor = xOffset;
   const normalized = text.toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
   for (const rawChar of normalized) {
-    const glyph = FONT[rawChar] || FONT['?'];
-    for (let row = 0; row < 7; row++) {
-      let column = 0;
-      while (column < 5) {
-        while (column < 5 && glyph[row][column] === '0') column++;
-        const start = column;
-        while (column < 5 && glyph[row][column] === '1') column++;
-        if (column > start) strokes.push({ x1:cursor + start*scale, x2:cursor + column*scale, y:yBottom + (6-row+0.5)*scale });
-      }
-    }
-    cursor += 5*scale + mechanical.glyphSpacingMm;
+    const glyph = VECTOR_FONT[rawChar] || VECTOR_FONT['?'];
+    glyph.strokes.forEach(stroke => paths.push(stroke.map(([x,y]) => ({ x:cursor + x*scale, y:yBottom + y*scale }))));
+    cursor += glyph.advance*scale + mechanical.glyphSpacingMm;
   }
-  return strokes;
+  return paths;
 }
 
 function buildLabel() {
@@ -336,14 +309,14 @@ function buildLabel() {
   const rowGap = rows === 2 ? Math.min(1, usable*0.08) : 0;
   const rowHeight = (usable-rowGap*(rows-1))/rows;
   if (rowHeight <= 1) throw new Error('El margen configurado no deja espacio imprimible.');
-  const scale = rowHeight/7;
+  const scale = rowHeight/10;
   const widths = texts.map(text => textMetrics(text, scale));
   const labelLength = Math.max(...widths) + 2*mechanical.tapeMarginMm;
-  const strokes = [];
+  const paths = [];
   texts.forEach((text,index) => {
     const yBottom = mechanical.tapeMarginMm + (rows-1-index)*(rowHeight+rowGap);
     const xOffset = mechanical.tapeMarginMm + (labelLength-widths[index])/2;
-    strokes.push(...rowStrokes(text,yBottom,scale,xOffset));
+    paths.push(...rowPaths(text,yBottom,scale,xOffset));
   });
 
   const up = servoAxis(mechanical.servoUpAngle);
@@ -352,28 +325,34 @@ function buildLabel() {
   const travelFeed = fmt(mechanical.travelSpeedMmS*60);
   const printFeed = fmt(mechanical.printSpeedMmS*60);
   const gcode = ['; Etiqueta generada por Labeler CNC','G21','G90',`G0 A${up}`,`G4 P${dwell}`,'G92 X0 Y0'];
-  for (const stroke of strokes) {
-    gcode.push(`G0 X${fmt(stroke.x1)} Y${fmt(stroke.y)} F${travelFeed}`);
+  for (const path of paths) {
+    if (path.length < 2) continue;
+    gcode.push(`G0 X${fmt(path[0].x)} Y${fmt(path[0].y)} F${travelFeed}`);
     gcode.push(`G0 A${down}`);
     gcode.push(`G4 P${dwell}`);
-    gcode.push(`G1 X${fmt(stroke.x2)} Y${fmt(stroke.y)} F${printFeed}`);
+    path.slice(1).forEach(point => gcode.push(`G1 X${fmt(point.x)} Y${fmt(point.y)} F${printFeed}`));
     gcode.push(`G0 A${up}`);
     gcode.push(`G4 P${dwell}`);
   }
   gcode.push(`G0 X${fmt(labelLength)} Y0 F${travelFeed}`,'M2');
-  return { gcode:gcode.join('\n'), labelLength };
+  return { gcode:gcode.join('\n'), labelLength, paths, width };
 }
 
 function updatePreview() {
   const width = tapeWidth();
   const two = $('#labelFormat').value === 'two';
   $('#line2Field').hidden = !two;
-  $('#preview1').textContent = $('#line1').value || ' ';
-  $('#preview2').textContent = two ? ($('#line2').value || ' ') : '';
-  $('#preview2').hidden = !two;
-  $('#tapePreview').style.aspectRatio = `${Math.max(2.4, ($('#line1').value.length+1)*0.45)} / 1`;
   $('#widthInfo').textContent = `${width} mm`;
-  try { $('#lengthInfo').textContent = `${buildLabel().labelLength.toFixed(1)} mm`; } catch { $('#lengthInfo').textContent = '--'; }
+  try {
+    const job = buildLabel();
+    const polylines = job.paths.map(path => `<polyline points="${path.map(point => `${fmt(point.x)},${fmt(job.width-point.y)}`).join(' ')}"/>`).join('');
+    $('#tapePreview').innerHTML = `<svg viewBox="0 0 ${fmt(job.labelLength)} ${fmt(job.width)}" role="img" aria-label="Recorrido vectorial del marcador">${polylines}</svg>`;
+    $('#tapePreview').style.aspectRatio = `${job.labelLength} / ${job.width}`;
+    $('#lengthInfo').textContent = `${job.labelLength.toFixed(1)} mm`;
+  } catch {
+    $('#tapePreview').innerHTML = '';
+    $('#lengthInfo').textContent = '--';
+  }
 }
 
 async function loadConfig() {
