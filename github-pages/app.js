@@ -136,15 +136,21 @@ class FluidNCClient extends EventTarget {
       }
       return;
     }
-    this.pending = this.queue.shift();
-    this.emit('log', { text: `> ${this.pending}` });
+    const batch = this.queue.splice(0, 16);
+    this.pending = batch;
+    batch.forEach(line => this.emit('log', { text: `> ${line}` }));
     try {
-      const response = await localFetch(`/api/labeler/command?cmd=${encodeURIComponent(this.pending)}`);
+      const response = await localFetch('/api/labeler/command', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/x-www-form-urlencoded' },
+        body:new URLSearchParams({ program:batch.join('\n') })
+      });
       const text = (await response.text()).trim();
-      if (text) this.emit('log', { text });
+      const relevantOutput = text.split(/\r?\n/).filter(line => line && line !== 'ok').join('\n');
+      if (relevantOutput) this.emit('log', { text:relevantOutput });
       if (!response.ok || /(^|\n)(error:|ALARM:)/i.test(text)) throw new Error(text || `HTTP ${response.status}`);
       this.pending = null;
-      this.sent++;
+      this.sent += batch.length;
       this.emit('progress', { sent:this.sent, total:this.total, purpose:this.purpose });
       this.pump();
     } catch (error) {
