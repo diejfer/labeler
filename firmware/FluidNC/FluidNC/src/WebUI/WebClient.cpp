@@ -6,7 +6,7 @@
 #include "WebClient.h"
 #include "Driver/Console.h"
 #include <ESPAsyncWebServer.h>
-#include "Settings.h"        // execute_line()
+#include "Settings.h"        // settings_execute_line()
 #include "Authentication.h"  // Auth levels
 
 namespace WebUI {
@@ -23,25 +23,7 @@ namespace WebUI {
                     cmd = webClient->cmds.front();
                     webClient->cmds.pop_front();
                     webClient->xBufferLock.unlock();
-                    size_t start = 0;
-                    while (start <= cmd.length()) {
-                        size_t end = cmd.find('\n', start);
-                        std::string line = cmd.substr(start, end == std::string::npos ? std::string::npos : end - start);
-                        if (!line.empty() && line.back() == '\r') {
-                            line.pop_back();
-                        }
-                        if (!line.empty()) {
-                            Error status = execute_line(line.c_str(), *webClient, AuthenticationLevel::LEVEL_ADMIN);
-                            webClient->ack(status);
-                            if (status != Error::Ok) {
-                                break;
-                            }
-                        }
-                        if (end == std::string::npos) {
-                            break;
-                        }
-                        start = end + 1;
-                    }
+                    settings_execute_line(cmd.c_str(), *webClient, AuthenticationLevel::LEVEL_ADMIN);
                     // Should not call detach, since we still need to send the remaining buffer, so we should not free and clear yet.
                     webClient->xBufferLock.lock();
                     webClient->done = true;
