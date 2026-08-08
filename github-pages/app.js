@@ -18,6 +18,7 @@ class FluidNCClient extends EventTarget {
     this.sent = 0;
     this.total = 0;
     this.statusTimer = null;
+    this.status = null;
   }
 
   emit(name, detail = {}) { this.dispatchEvent(new CustomEvent(name, { detail })); }
@@ -43,6 +44,7 @@ class FluidNCClient extends EventTarget {
       const response = await localFetch('/api/labeler/status');
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const status = await response.json();
+      this.status = status;
       this.emit('status', { state:status.state, positions:[status.x,status.y,0,status.a] });
       return status;
     } catch (error) {
@@ -75,6 +77,35 @@ class FluidNCClient extends EventTarget {
     this.purpose = purpose;
     this.emit('progress', { sent: 0, total: this.total, purpose });
     this.pump();
+  }
+
+  async moveServo(angle) {
+    if (!this.online) throw new Error('El controlador no está conectado.');
+    if (this.pending || this.queue.length) throw new Error('Ya hay un envío en curso.');
+    const status = await this.pollStatus();
+    if (status.state !== 'Idle') throw new Error(`La máquina está en estado ${status.state}.`);
+    const target = servoAxis(angle);
+    const delta = fmt(target - status.a);
+    if (Math.abs(delta) < 0.001) {
+      this.emit('log', { text:`El servo ya está en ${angle}°.` });
+      return;
+    }
+    this.run(`G91\nG0 A${delta} F3600\nG90`, 'manual');
+  }
+
+  async jogServo(deltaAngle) {
+    if (!this.online) throw new Error('El controlador no está conectado.');
+    if (this.pending || this.queue.length) throw new Error('Ya hay un envío en curso.');
+    const status = await this.pollStatus();
+    if (status.state !== 'Idle') throw new Error(`La máquina está en estado ${status.state}.`);
+    const currentAngle = status.a + 180;
+    const targetAngle = Math.max(0, Math.min(180, currentAngle + deltaAngle));
+    const delta = fmt(targetAngle - currentAngle);
+    if (Math.abs(delta) < 0.001) {
+      this.emit('log', { text:`El servo alcanzó el límite de ${targetAngle}°.` });
+      return;
+    }
+    this.run(`G91\nG0 A${delta} F3600\nG90`, 'manual');
   }
 
   async pump() {
@@ -179,7 +210,15 @@ document.body.innerHTML = `
   <fieldset><legend>Motor X — avance longitudinal</legend><div class="field"><label>Pasos por milímetro</label><input name="xStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="xMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="xAccelerationMmS2" type="number" min="0.1" step="0.1"></div></fieldset>
   <fieldset><legend>Motor Y — ancho de cinta</legend><div class="field"><label>Pasos por milímetro</label><input name="yStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="yMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="yAccelerationMmS2" type="number" min="0.1" step="0.1"></div></fieldset>
   <fieldset><legend>Impresión</legend><div class="field"><label>Velocidad de traslado (mm/s)</label><input name="travelSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Velocidad con marcador apoyado (mm/s)</label><input name="printSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Margen de cinta (mm)</label><input name="tapeMarginMm" type="number" min="0" step="0.1"></div><div class="field"><label>Espacio entre caracteres (mm)</label><input name="glyphSpacingMm" type="number" min="0" step="0.1"></div></fieldset>
-  <fieldset><legend>Servomotor</legend><div class="field"><label>Ángulo marcador alejado</label><input name="servoUpAngle" type="number" min="0" max="180"></div><div class="field"><label>Ángulo marcador apoyado</label><input name="servoDownAngle" type="number" min="0" max="180"></div><div class="field"><label>Espera del servo (ms)</label><input name="servoDelayMs" type="number" min="0" max="5000"></div></fieldset>
+  <fieldset><legend>Servomotor</legend>
+    <div class="field"><label>Posición actual</label><strong id="servoCalibrationPosition">--</strong></div>
+    <div class="actions servo-jog"><button type="button" data-servo-jog="-10" class="secondary">-10°</button><button type="button" data-servo-jog="-1" class="secondary">-1°</button><button type="button" data-servo-jog="1" class="secondary">+1°</button><button type="button" data-servo-jog="10" class="secondary">+10°</button></div>
+    <div class="field"><label>Ángulo marcador alejado</label><input name="servoUpAngle" type="number" min="0" max="180"></div>
+    <div class="actions"><button id="captureServoUp" type="button" class="secondary">Usar posición actual</button><button id="testServoUp" type="button" class="secondary">Probar alejado</button></div>
+    <div class="field"><label>Ángulo marcador apoyado</label><input name="servoDownAngle" type="number" min="0" max="180"></div>
+    <div class="actions"><button id="captureServoDown" type="button" class="secondary">Usar posición actual</button><button id="testServoDown" type="button" class="warn">Probar apoyado</button></div>
+    <div class="field"><label>Espera del servo (ms)</label><input name="servoDelayMs" type="number" min="0" max="5000"></div>
+  </fieldset>
 </div><div class="actions"><button>Guardar en ESP32</button><span id="configMessage" class="muted"></span></div></form></section>
 </div>`;
 
@@ -314,6 +353,7 @@ client.addEventListener('status', event => {
   $('#posY').textContent = `${(status.positions[1] ?? 0).toFixed(2)} mm`;
   const a = status.positions[3];
   $('#posA').textContent = Number.isFinite(a) ? `${(a+180).toFixed(1)}°` : '--';
+  $('#servoCalibrationPosition').textContent = Number.isFinite(a) ? `${(a+180).toFixed(1)}°` : '--';
 });
 client.addEventListener('progress', event => {
   if (event.detail.purpose === 'configuration') return;
@@ -339,8 +379,23 @@ $('#pause').onclick = () => client.action('pause').catch(error => log(error.mess
 $('#resume').onclick = () => client.action('resume').catch(error => log(error.message));
 $('#reset').onclick = () => client.cancel();
 $('#unlock').onclick = () => { try { client.run('$X','manual'); } catch(error) { log(error.message); } };
-$('#penUp').onclick = () => { try { client.run(`G90\nG0 A${servoAxis(mechanical.servoUpAngle)}`,'manual'); } catch(error) { log(error.message); } };
-$('#penDown').onclick = () => { try { client.run(`G90\nG0 A${servoAxis(mechanical.servoDownAngle)}`,'manual'); } catch(error) { log(error.message); } };
+$('#penUp').onclick = () => client.moveServo(mechanical.servoUpAngle).catch(error => log(error.message));
+$('#penDown').onclick = () => client.moveServo(mechanical.servoDownAngle).catch(error => log(error.message));
+document.querySelectorAll('[data-servo-jog]').forEach(button => button.onclick = () => {
+  client.jogServo(Number(button.dataset.servoJog)).catch(error => log(error.message));
+});
+$('#captureServoUp').onclick = () => {
+  const a = client.status?.a;
+  if (!Number.isFinite(a)) return log('No hay una posición de servo disponible.');
+  $('[name="servoUpAngle"]').value = fmt(a + 180);
+};
+$('#captureServoDown').onclick = () => {
+  const a = client.status?.a;
+  if (!Number.isFinite(a)) return log('No hay una posición de servo disponible.');
+  $('[name="servoDownAngle"]').value = fmt(a + 180);
+};
+$('#testServoUp').onclick = () => client.moveServo(number('[name="servoUpAngle"]')).catch(error => log(error.message));
+$('#testServoDown').onclick = () => client.moveServo(number('[name="servoDownAngle"]')).catch(error => log(error.message));
 $('#sendManual').onclick = () => { try { client.run($('#manual').value,'manual'); $('#manual').value=''; } catch(error) { log(error.message); } };
 $('#manual').onkeydown = event => { if (event.key === 'Enter') $('#sendManual').click(); };
 
