@@ -194,6 +194,7 @@ namespace WebUI {
         _webserver->on("/api/labeler/config", HTTP_POST, handleLabelerConfigPost);
         _webserver->on("/api/labeler/config", HTTP_OPTIONS, handleLabelerOptions);
         _webserver->on("/api/labeler/command", HTTP_GET, handleLabelerCommand);
+        _webserver->on("/api/labeler/command", HTTP_POST, handleLabelerCommand);
         _webserver->on("/api/labeler/command", HTTP_OPTIONS, handleLabelerOptions);
         _webserver->on("/api/labeler/status", HTTP_GET, handleLabelerStatus);
         _webserver->on("/api/labeler/status", HTTP_OPTIONS, handleLabelerOptions);
@@ -520,13 +521,11 @@ namespace WebUI {
             request->send(503, "text/plain", "Try again when not moving\n");
             return;
         }
-        char line[256];
-        strncpy(line, cmd, 255);
         AsyncWebServerResponse* response;
-        if (request->method() == HTTP_GET) {
+        if (request->method() == HTTP_GET || request->hasParam("program", true)) {
             WebClient* webClient = new WebClient();
             webClient->attachWS(silent);
-            webClient->executeCommandBackground(line);
+            webClient->executeCommandBackground(cmd);
             response = request->beginChunkedResponse("", [webClient, request](uint8_t* buffer, size_t maxLen, size_t total) mutable -> size_t {
                 // The method can change before the end... not good
                 //if(request->method() != HTTP_GET)
@@ -1519,12 +1518,18 @@ namespace WebUI {
     }
 
     void WebUI_Server::handleLabelerCommand(AsyncWebServerRequest* request) {
-        if (!request->hasParam("cmd")) {
+        bool   isBatch = request->hasParam("program", true);
+        String command;
+        if (isBatch) {
+            command = request->getParam("program", true)->value();
+        } else if (request->hasParam("cmd")) {
+            command = request->getParam("cmd")->value();
+        } else {
             request->send(400, "application/json", "{\"error\":\"Falta el comando\"}");
             return;
         }
-        String command = request->getParam("cmd")->value();
-        if (command.length() == 0 || command.length() > 240 || command.indexOf('\n') >= 0 || command.indexOf('\r') >= 0) {
+        size_t maxLength = isBatch ? 4096 : 240;
+        if (command.length() == 0 || command.length() > maxLength || (!isBatch && (command.indexOf('\n') >= 0 || command.indexOf('\r') >= 0))) {
             request->send(400, "application/json", "{\"error\":\"Comando invalido\"}");
             return;
         }
