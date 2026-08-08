@@ -82,6 +82,15 @@ namespace WebUI {
     EnumSetting *http_enable, *http_block_during_motion;
     IntSetting*  http_port;
 
+    class LabelerHttpChannel : public Channel {
+    public:
+        LabelerHttpChannel() : Channel("labeler_http") {}
+        size_t write(uint8_t) override { return 1; }
+    };
+
+    static LabelerHttpChannel labelerHttpChannel;
+    static bool               labelerHttpChannelRegistered = false;
+
     WebUI_Server::~WebUI_Server() {
         deinit();
     }
@@ -101,6 +110,11 @@ namespace WebUI {
 
         if (WiFi.getMode() == WIFI_OFF || !http_enable->get()) {
             return;
+        }
+
+        if (!labelerHttpChannelRegistered) {
+            allChannels.registration(&labelerHttpChannel);
+            labelerHttpChannelRegistered = true;
         }
 
         _port = http_port->get();
@@ -1533,7 +1547,18 @@ namespace WebUI {
             request->send(400, "application/json", "{\"error\":\"Comando invalido\"}");
             return;
         }
-        synchronousCommand(request, command.c_str(), false, AuthenticationLevel::LEVEL_ADMIN, true);
+        size_t required = command.length() + 1;
+        if (required > static_cast<size_t>(labelerHttpChannel.rx_buffer_available())) {
+            AsyncWebServerResponse* response = request->beginResponse(503, "application/json", "{\"error\":\"Cola de G-code ocupada\"}");
+            response->addHeader("Retry-After", "1");
+            request->send(response);
+            return;
+        }
+        labelerHttpChannel.push(std::string_view(command.c_str(), command.length()));
+        labelerHttpChannel.push(static_cast<uint8_t>('\n'));
+        char responseBody[80];
+        snprintf(responseBody, sizeof(responseBody), "{\"queued\":%d}", labelerHttpChannel.available());
+        request->send(202, "application/json", responseBody);
     }
 
     void WebUI_Server::handleLabelerStatus(AsyncWebServerRequest* request) {
@@ -1542,11 +1567,12 @@ namespace WebUI {
         char json[220];
         snprintf(json,
                  sizeof(json),
-                 "{\"hostname\":\"labeler\",\"state\":\"%s\",\"x\":%.4f,\"y\":%.4f,\"a\":%.4f}",
+                 "{\"hostname\":\"labeler\",\"state\":\"%s\",\"x\":%.4f,\"y\":%.4f,\"a\":%.4f,\"queued\":%d}",
                  state_name(),
                  position[0] - wco[0],
                  position[1] - wco[1],
-                 position[3]);
+                 position[3],
+                 labelerHttpChannel.available());
         AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
         response->addHeader("Cache-Control", "no-store");
         request->send(response);

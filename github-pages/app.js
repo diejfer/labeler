@@ -18,6 +18,7 @@ class FluidNCClient extends EventTarget {
     this.sent = 0;
     this.total = 0;
     this.statusTimer = null;
+    this.completionTimer = null;
     this.status = null;
   }
 
@@ -37,7 +38,13 @@ class FluidNCClient extends EventTarget {
     }
   }
 
-  disconnect() { clearInterval(this.statusTimer); this.statusTimer = null; this.online = false; }
+  disconnect() {
+    clearInterval(this.statusTimer);
+    clearTimeout(this.completionTimer);
+    this.statusTimer = null;
+    this.completionTimer = null;
+    this.online = false;
+  }
 
   async pollStatus() {
     try {
@@ -67,7 +74,7 @@ class FluidNCClient extends EventTarget {
 
   run(program, purpose = 'program') {
     if (!this.online) throw new Error('El controlador no está conectado.');
-    if (this.pending || this.queue.length) throw new Error('Ya hay un envío en curso.');
+    if (this.pending || this.queue.length || this.total) throw new Error('Ya hay un envío en curso.');
     const lines = program.split(/\r?\n/).map(line => line.replace(/;.*$/, '').trim()).filter(Boolean);
     if (!lines.length) throw new Error('No hay comandos para enviar.');
     this.queue = lines;
@@ -128,15 +135,22 @@ class FluidNCClient extends EventTarget {
   }
 
   async pump() {
-    if (this.pending || !this.queue.length || !this.online) {
-      if (!this.pending && !this.queue.length && this.total) {
-        const purpose = this.purpose;
-        this.total = 0;
-        this.emit('complete', { purpose });
-      }
+    if (this.pending || !this.online) {
       return;
     }
-    const batch = this.queue.splice(0, 16);
+    if (!this.queue.length) {
+      this.scheduleCompletionCheck();
+      return;
+    }
+    const batch = [];
+    let batchLength = 0;
+    while (this.queue.length && batch.length < 12) {
+      const next = this.queue[0];
+      const nextLength = next.length + (batch.length ? 1 : 0);
+      if (batch.length && batchLength + nextLength > 220) break;
+      batch.push(this.queue.shift());
+      batchLength += nextLength;
+    }
     this.pending = batch;
     batch.forEach(line => this.emit('log', { text: `> ${line}` }));
     try {
@@ -146,8 +160,12 @@ class FluidNCClient extends EventTarget {
         body:new URLSearchParams({ program:batch.join('\n') })
       });
       const text = (await response.text()).trim();
-      const relevantOutput = text.split(/\r?\n/).filter(line => line && line !== 'ok').join('\n');
-      if (relevantOutput) this.emit('log', { text:relevantOutput });
+      if (response.status === 503) {
+        this.queue.unshift(...batch);
+        this.pending = null;
+        setTimeout(() => this.pump(), 150);
+        return;
+      }
       if (!response.ok || /(^|\n)(error:|ALARM:)/i.test(text)) throw new Error(text || `HTTP ${response.status}`);
       this.pending = null;
       this.sent += batch.length;
@@ -161,10 +179,35 @@ class FluidNCClient extends EventTarget {
     }
   }
 
+  scheduleCompletionCheck() {
+    if (this.completionTimer || !this.total) return;
+    this.completionTimer = setTimeout(() => this.checkCompletion(), 200);
+  }
+
+  async checkCompletion() {
+    this.completionTimer = null;
+    if (!this.total || !this.online) return;
+    try {
+      const status = await this.pollStatus();
+      if ((status.queued ?? 0) === 0 && status.state === 'Idle') {
+        const purpose = this.purpose;
+        this.total = 0;
+        this.emit('complete', { purpose });
+        return;
+      }
+      this.scheduleCompletionCheck();
+    } catch (error) {
+      this.total = 0;
+      this.emit('failure', { response:error.message, purpose:this.purpose });
+    }
+  }
+
   cancel() {
     this.queue = [];
     this.pending = null;
     this.total = 0;
+    clearTimeout(this.completionTimer);
+    this.completionTimer = null;
     this.action('reset').catch(error => this.emit('log', { text:error.message }));
     this.emit('progress', { sent: 0, total: 0 });
   }
