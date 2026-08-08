@@ -6,7 +6,7 @@
 #include "WebClient.h"
 #include "Driver/Console.h"
 #include <ESPAsyncWebServer.h>
-#include "Settings.h"        // settings_execute_line()
+#include "Settings.h"        // execute_line()
 #include "Authentication.h"  // Auth levels
 
 namespace WebUI {
@@ -23,8 +23,8 @@ namespace WebUI {
                     cmd = webClient->cmds.front();
                     webClient->cmds.pop_front();
                     webClient->xBufferLock.unlock();
-                    // TODO: check error result and see if we can do anything...
-                    settings_execute_line(cmd.c_str(), *webClient, AuthenticationLevel::LEVEL_ADMIN);
+                    Error status = execute_line(cmd.c_str(), *webClient, AuthenticationLevel::LEVEL_ADMIN);
+                    webClient->ack(status);
                     // Should not call detach, since we still need to send the remaining buffer, so we should not free and clear yet.
                     webClient->xBufferLock.lock();
                     webClient->done = true;
