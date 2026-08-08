@@ -108,6 +108,25 @@ class FluidNCClient extends EventTarget {
     this.run(`G91\nG0 A${delta} F3600\nG90`, 'manual');
   }
 
+  async jogAxis(axis, steps, stepsPerMm, maxSpeedMmS) {
+    if (!this.online) throw new Error('El controlador no está conectado.');
+    if (this.pending || this.queue.length) throw new Error('Ya hay un envío en curso.');
+    const status = await this.pollStatus();
+    if (status.state !== 'Idle') throw new Error(`La máquina está en estado ${status.state}.`);
+    if (!Number.isFinite(stepsPerMm) || stepsPerMm <= 0) throw new Error('Los pasos por milímetro deben ser mayores que cero.');
+    const distance = fmt(steps / stepsPerMm);
+    const feed = fmt(Math.min(maxSpeedMmS, 10) * 60);
+    this.run(`G91\nG1 ${axis}${distance} F${feed}\nG90`, 'manual');
+  }
+
+  async zeroAxis(axis) {
+    if (!this.online) throw new Error('El controlador no está conectado.');
+    if (this.pending || this.queue.length) throw new Error('Ya hay un envío en curso.');
+    const status = await this.pollStatus();
+    if (status.state !== 'Idle') throw new Error(`La máquina está en estado ${status.state}.`);
+    this.run(`G92 ${axis}0`, 'manual');
+  }
+
   async pump() {
     if (this.pending || !this.queue.length || !this.online) {
       if (!this.pending && !this.queue.length && this.total) {
@@ -207,8 +226,18 @@ document.body.innerHTML = `
 </div></section>
 
 <section id="tab-config" class="tab"><form id="configForm" class="panel config-panel"><h2>Configuración mecánica persistente</h2><p class="muted">Estos valores se guardan en la memoria NVS del ESP32. Los textos y el formato de etiqueta no se guardan.</p><div class="config-grid">
-  <fieldset><legend>Motor X — avance longitudinal</legend><div class="field"><label>Pasos por milímetro</label><input name="xStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="xMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="xAccelerationMmS2" type="number" min="0.1" step="0.1"></div></fieldset>
-  <fieldset><legend>Motor Y — ancho de cinta</legend><div class="field"><label>Pasos por milímetro</label><input name="yStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="yMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="yAccelerationMmS2" type="number" min="0.1" step="0.1"></div></fieldset>
+  <fieldset><legend>Motor X — avance longitudinal</legend>
+    <div class="field"><label>Posición actual</label><strong id="motorXCalibrationPosition">--</strong></div>
+    <div class="actions stepper-jog"><button type="button" data-axis-jog="X" data-steps="-100" class="secondary">-100 pasos</button><button type="button" data-axis-jog="X" data-steps="-10" class="secondary">-10</button><button type="button" data-axis-jog="X" data-steps="-1" class="secondary">-1</button><button type="button" data-axis-jog="X" data-steps="1" class="secondary">+1</button><button type="button" data-axis-jog="X" data-steps="10" class="secondary">+10</button><button type="button" data-axis-jog="X" data-steps="100" class="secondary">+100 pasos</button></div>
+    <div class="actions"><button type="button" data-axis-zero="X" class="secondary">Poner X en cero</button></div>
+    <div class="field"><label>Pasos por milímetro</label><input name="xStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="xMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="xAccelerationMmS2" type="number" min="0.1" step="0.1"></div>
+  </fieldset>
+  <fieldset><legend>Motor Y — ancho de cinta</legend>
+    <div class="field"><label>Posición actual</label><strong id="motorYCalibrationPosition">--</strong></div>
+    <div class="actions stepper-jog"><button type="button" data-axis-jog="Y" data-steps="-100" class="secondary">-100 pasos</button><button type="button" data-axis-jog="Y" data-steps="-10" class="secondary">-10</button><button type="button" data-axis-jog="Y" data-steps="-1" class="secondary">-1</button><button type="button" data-axis-jog="Y" data-steps="1" class="secondary">+1</button><button type="button" data-axis-jog="Y" data-steps="10" class="secondary">+10</button><button type="button" data-axis-jog="Y" data-steps="100" class="secondary">+100 pasos</button></div>
+    <div class="actions"><button type="button" data-axis-zero="Y" class="secondary">Poner Y en cero</button></div>
+    <div class="field"><label>Pasos por milímetro</label><input name="yStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="yMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="yAccelerationMmS2" type="number" min="0.1" step="0.1"></div>
+  </fieldset>
   <fieldset><legend>Impresión</legend><div class="field"><label>Velocidad de traslado (mm/s)</label><input name="travelSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Velocidad con marcador apoyado (mm/s)</label><input name="printSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Margen de cinta (mm)</label><input name="tapeMarginMm" type="number" min="0" step="0.1"></div><div class="field"><label>Espacio entre caracteres (mm)</label><input name="glyphSpacingMm" type="number" min="0" step="0.1"></div></fieldset>
   <fieldset><legend>Servomotor</legend>
     <div class="field"><label>Posición actual</label><strong id="servoCalibrationPosition">--</strong></div>
@@ -351,6 +380,8 @@ client.addEventListener('status', event => {
   $('#machineState').className = status.state === 'Idle' ? 'state-idle' : 'state-run';
   $('#posX').textContent = `${(status.positions[0] ?? 0).toFixed(2)} mm`;
   $('#posY').textContent = `${(status.positions[1] ?? 0).toFixed(2)} mm`;
+  $('#motorXCalibrationPosition').textContent = `${(status.positions[0] ?? 0).toFixed(3)} mm`;
+  $('#motorYCalibrationPosition').textContent = `${(status.positions[1] ?? 0).toFixed(3)} mm`;
   const a = status.positions[3];
   $('#posA').textContent = Number.isFinite(a) ? `${(a+180).toFixed(1)}°` : '--';
   $('#servoCalibrationPosition').textContent = Number.isFinite(a) ? `${(a+180).toFixed(1)}°` : '--';
@@ -383,6 +414,17 @@ $('#penUp').onclick = () => client.moveServo(mechanical.servoUpAngle).catch(erro
 $('#penDown').onclick = () => client.moveServo(mechanical.servoDownAngle).catch(error => log(error.message));
 document.querySelectorAll('[data-servo-jog]').forEach(button => button.onclick = () => {
   client.jogServo(Number(button.dataset.servoJog)).catch(error => log(error.message));
+});
+document.querySelectorAll('[data-axis-jog]').forEach(button => button.onclick = () => {
+  const axis = button.dataset.axisJog;
+  const prefix = axis.toLowerCase();
+  const steps = Number(button.dataset.steps);
+  const stepsPerMm = number(`[name="${prefix}StepsPerMm"]`);
+  const maxSpeed = number(`[name="${prefix}MaxSpeedMmS"]`);
+  client.jogAxis(axis, steps, stepsPerMm, maxSpeed).catch(error => log(error.message));
+});
+document.querySelectorAll('[data-axis-zero]').forEach(button => button.onclick = () => {
+  client.zeroAxis(button.dataset.axisZero).catch(error => log(error.message));
 });
 $('#captureServoUp').onclick = () => {
   const a = client.status?.a;

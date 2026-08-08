@@ -1533,13 +1533,14 @@ namespace WebUI {
 
     void WebUI_Server::handleLabelerStatus(AsyncWebServerRequest* request) {
         float* position = get_mpos();
+        float* wco      = get_wco();
         char json[220];
         snprintf(json,
                  sizeof(json),
                  "{\"hostname\":\"labeler\",\"state\":\"%s\",\"x\":%.4f,\"y\":%.4f,\"a\":%.4f}",
                  state_name(),
-                 position[0],
-                 position[1],
+                 position[0] - wco[0],
+                 position[1] - wco[1],
                  position[3]);
         AsyncWebServerResponse* response = request->beginResponse(200, "application/json", json);
         response->addHeader("Cache-Control", "no-store");
