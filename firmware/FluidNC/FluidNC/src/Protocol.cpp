@@ -289,7 +289,10 @@ void protocol_main_loop() {
 
         if (idleEndTime && (getCpuTicks() - idleEndTime) > 0) {
             idleEndTime = 0;  //
-            Axes::set_disable(true, false);
+            // Labeler: release both stepper axes while idle, but keep the
+            // RC-servo (axis A) energized so the marker remains retracted.
+            Axes::set_disable(X_AXIS, true, false);
+            Axes::set_disable(Y_AXIS, true, false);
         }
         uint32_t newHeapSize = xPortGetFreeHeapSize();
         if (newHeapSize < heapLowWater) {

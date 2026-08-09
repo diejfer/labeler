@@ -6,7 +6,8 @@ board: "ESP32 DevKit V1"
 # transmision, reemplazar steps_per_mm por el valor mecanico real.
 stepping:
   engine: RMT
-  idle_ms: 255
+  # Libera X e Y inmediatamente cuando termina el movimiento.
+  idle_ms: 0
   pulse_us: 4
   dir_delay_us: 2
   disable_delay_us: 0

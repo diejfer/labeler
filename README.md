@@ -70,6 +70,10 @@ calibración mecánica desconocida.
 Los dos A4988 y el servo deben compartir GND con el ESP32. El servo debe usar
 una fuente externa de 5 V; no debe alimentarse desde 3V3.
 
+Los drivers X e Y se habilitan automáticamente al comenzar un movimiento y se
+deshabilitan al volver a `Idle`, permitiendo mover ambos mecanismos a mano. El
+servo permanece energizado para conservar el marcador en la posición alejada.
+
 ## Calibración inicial
 
 El YAML inicial usa `steps_per_mm: 1`. Al conectarse la aplicación, reemplaza
