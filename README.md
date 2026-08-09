@@ -26,14 +26,24 @@ fueron creados por el Dr. A. V. Hershey en el U.S. National Bureau of Standards
 y el formato JHF distribuido fue creado por James Hurt, Cognition, Inc. La
 licencia y los datos originales están en `github-pages/vendor/hershey`.
 
+También se incluyen Playwrite DE SAS Guides, Orbitron y las cuatro variantes
+de Lobster Two desde el repositorio oficial de Google Fonts, bajo SIL OFL 1.1.
+Los Material Symbols Outlined y su catálogo de nombres provienen del repositorio
+oficial de Google y se distribuyen bajo Apache 2.0. `opentype.js` se utiliza
+bajo licencia MIT para transformar los contornos tipográficos en recorridos.
+Todas las licencias están junto a sus assets en `github-pages/vendor`.
+
 ## Aplicación de etiquetas
 
 La interfaz permite seleccionar cintas de 6, 9, 12, 18, 24 o 36 mm, o ingresar
 un ancho particular. Puede generar etiquetas de uno o dos renglones. El texto
 se convierte en recorridos mediante Hershey Roman Simplex, una fuente vectorial
-estándar de trazo simple para plotters, con mayúsculas y minúsculas. El editor
-permite ajustar el interlineado y aplicar
-negrita, cursiva y subrayado tanto a la vista previa como al G-code.
+estándar de trazo simple para plotters, con mayúsculas y minúsculas. También
+permite elegir fuentes OpenType de Google Fonts, cuyos contornos Bézier se
+aproximan mediante segmentos de precisión mecánica. El editor permite ajustar
+el interlineado y aplicar negrita, cursiva y subrayado tanto a la vista previa
+como al G-code, además de buscar e insertar cualquiera de los Material Symbols
+Outlined disponibles mediante tokens como `{home}`.
 
 El eje X corresponde al sentido longitudinal de la cinta, Y a su ancho y el eje
 A al servo que acerca o aleja el marcador. Antes de imprimir se muestra el
