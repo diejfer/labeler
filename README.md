@@ -21,12 +21,18 @@ Pages para buscar dispositivos en la red local. La implementación apunta a
 Chrome/Edge 142 o posterior. El ESP32 y el navegador deben estar en la misma
 red Wi-Fi con mDNS habilitado.
 
+La fuente incluida deriva de Hershey Roman Simplex. Los glifos originales
+fueron creados por el Dr. A. V. Hershey en el U.S. National Bureau of Standards
+y el formato JHF distribuido fue creado por James Hurt, Cognition, Inc. La
+licencia y los datos originales están en `github-pages/vendor/hershey`.
+
 ## Aplicación de etiquetas
 
 La interfaz permite seleccionar cintas de 6, 9, 12, 18, 24 o 36 mm, o ingresar
 un ancho particular. Puede generar etiquetas de uno o dos renglones. El texto
-se convierte en recorridos mediante una fuente vectorial de trazo simple con
-mayúsculas y minúsculas. El editor permite ajustar el interlineado y aplicar
+se convierte en recorridos mediante Hershey Roman Simplex, una fuente vectorial
+estándar de trazo simple para plotters, con mayúsculas y minúsculas. El editor
+permite ajustar el interlineado y aplicar
 negrita, cursiva y subrayado tanto a la vista previa como al G-code.
 
 El eje X corresponde al sentido longitudinal de la cinta, Y a su ancho y el eje
