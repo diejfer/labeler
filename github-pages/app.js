@@ -218,7 +218,7 @@ const VECTOR_FONT = window.LABELER_VECTOR_FONT;
 const DEFAULT_CONFIG = {
   xStepsPerMm:80, yStepsPerMm:80, xMaxSpeedMmS:40, yMaxSpeedMmS:25,
   xAccelerationMmS2:100, yAccelerationMmS2:100, travelSpeedMmS:25,
-  printSpeedMmS:8, tapeMarginMm:1.5, glyphSpacingMm:1,
+  xBacklashMm:0, yBacklashMm:0, printSpeedMmS:8, tapeMarginMm:1.5, glyphSpacingMm:1,
   servoUpAngle:90, servoDownAngle:35, servoDelayMs:180
 };
 
@@ -257,13 +257,13 @@ document.body.innerHTML = `
     <div class="field"><label>Posición actual</label><strong id="motorXCalibrationPosition">--</strong></div>
     <div class="actions stepper-jog"><button type="button" data-axis-jog="X" data-steps="-100" class="secondary">-100 pasos</button><button type="button" data-axis-jog="X" data-steps="-10" class="secondary">-10</button><button type="button" data-axis-jog="X" data-steps="-1" class="secondary">-1</button><button type="button" data-axis-jog="X" data-steps="1" class="secondary">+1</button><button type="button" data-axis-jog="X" data-steps="10" class="secondary">+10</button><button type="button" data-axis-jog="X" data-steps="100" class="secondary">+100 pasos</button></div>
     <div class="actions"><button type="button" data-axis-zero="X" class="secondary">Poner X en cero</button></div>
-    <div class="field"><label>Pasos por milímetro</label><input name="xStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="xMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="xAccelerationMmS2" type="number" min="0.1" step="0.1"></div>
+    <div class="field"><label>Pasos por milímetro</label><input name="xStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="xMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="xAccelerationMmS2" type="number" min="0.1" step="0.1"></div><div class="field"><label>Holgura / backlash (mm)</label><input name="xBacklashMm" type="number" min="0" max="10" step="0.001"><span class="muted">Usá 0 para desactivar la compensación.</span></div>
   </fieldset>
   <fieldset><legend>Motor Y — ancho de cinta</legend>
     <div class="field"><label>Posición actual</label><strong id="motorYCalibrationPosition">--</strong></div>
     <div class="actions stepper-jog"><button type="button" data-axis-jog="Y" data-steps="-100" class="secondary">-100 pasos</button><button type="button" data-axis-jog="Y" data-steps="-10" class="secondary">-10</button><button type="button" data-axis-jog="Y" data-steps="-1" class="secondary">-1</button><button type="button" data-axis-jog="Y" data-steps="1" class="secondary">+1</button><button type="button" data-axis-jog="Y" data-steps="10" class="secondary">+10</button><button type="button" data-axis-jog="Y" data-steps="100" class="secondary">+100 pasos</button></div>
     <div class="actions"><button type="button" data-axis-zero="Y" class="secondary">Poner Y en cero</button></div>
-    <div class="field"><label>Pasos por milímetro</label><input name="yStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="yMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="yAccelerationMmS2" type="number" min="0.1" step="0.1"></div>
+    <div class="field"><label>Pasos por milímetro</label><input name="yStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="yMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="yAccelerationMmS2" type="number" min="0.1" step="0.1"></div><div class="field"><label>Holgura / backlash (mm)</label><input name="yBacklashMm" type="number" min="0" max="10" step="0.001"><span class="muted">Se aplica cuando el eje Y invierte el sentido.</span></div>
   </fieldset>
   <fieldset><legend>Impresión</legend><div class="field"><label>Velocidad de traslado (mm/s)</label><input name="travelSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Velocidad con marcador apoyado (mm/s)</label><input name="printSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Margen de cinta (mm)</label><input name="tapeMarginMm" type="number" min="0" step="0.1"></div><div class="field"><label>Espacio entre caracteres (mm)</label><input name="glyphSpacingMm" type="number" min="0" step="0.1"></div></fieldset>
   <fieldset><legend>Servomotor</legend>
@@ -325,16 +325,37 @@ function buildLabel() {
   const travelFeed = fmt(mechanical.travelSpeedMmS*60);
   const printFeed = fmt(mechanical.printSpeedMmS*60);
   const gcode = ['; Etiqueta generada por Labeler CNC','G21','G90',`G0 A${up}`,`G4 P${dwell}`,'G92 X0 Y0'];
+  const position = { x:0, y:0 };
+  const direction = { x:0, y:0 };
+  const backlash = { x:mechanical.xBacklashMm, y:mechanical.yBacklashMm };
+  const moveTo = (motion, target, feed) => {
+    const nextDirection = {
+      x:Math.sign(target.x-position.x),
+      y:Math.sign(target.y-position.y)
+    };
+    const reversals = ['x','y'].filter(axis => backlash[axis] > 0 && nextDirection[axis] && direction[axis] && nextDirection[axis] !== direction[axis]);
+    if (reversals.length) {
+      const takeup = reversals.map(axis => `${axis.toUpperCase()}${fmt(nextDirection[axis]*backlash[axis])}`).join(' ');
+      const restore = reversals.map(axis => `${axis.toUpperCase()}${fmt(position[axis])}`).join(' ');
+      gcode.push('G91',`G0 ${takeup} F${travelFeed}`,'G90',`G92 ${restore}`);
+    }
+    gcode.push(`${motion} X${fmt(target.x)} Y${fmt(target.y)} F${feed}`);
+    ['x','y'].forEach(axis => {
+      if (nextDirection[axis]) direction[axis] = nextDirection[axis];
+      position[axis] = target[axis];
+    });
+  };
   for (const path of paths) {
     if (path.length < 2) continue;
-    gcode.push(`G0 X${fmt(path[0].x)} Y${fmt(path[0].y)} F${travelFeed}`);
+    moveTo('G0', path[0], travelFeed);
     gcode.push(`G0 A${down}`);
     gcode.push(`G4 P${dwell}`);
-    path.slice(1).forEach(point => gcode.push(`G1 X${fmt(point.x)} Y${fmt(point.y)} F${printFeed}`));
+    path.slice(1).forEach(point => moveTo('G1', point, printFeed));
     gcode.push(`G0 A${up}`);
     gcode.push(`G4 P${dwell}`);
   }
-  gcode.push(`G0 X${fmt(labelLength)} Y0 F${travelFeed}`,'M2');
+  moveTo('G0', { x:labelLength, y:0 }, travelFeed);
+  gcode.push('M2');
   return { gcode:gcode.join('\n'), labelLength, paths, width };
 }
 

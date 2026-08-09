@@ -85,6 +85,11 @@ Actualizar luego `max_rate_mm_per_min`, `acceleration_mm_per_sec2` y
 El servo es el eje A. FluidNC usa el rango interno A=-180..0 y la interfaz lo
 traduce a 0..180 grados.
 
+La configuración web permite indicar la holgura mecánica de X e Y en
+milímetros. Cuando el generador detecta una inversión, agrega un movimiento
+relativo exclusivo para tomar esa holgura y restaura la coordenada lógica con
+`G92` antes de continuar el trazo. Un valor de `0` desactiva la compensación.
+
 ## Instalación
 
 Desde `firmware/FluidNC`:
