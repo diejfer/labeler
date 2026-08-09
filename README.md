@@ -131,6 +131,12 @@ platformio run -e wifi -t uploadfs
 También pueden cargarse ambos archivos desde el administrador web de FluidNC.
 Reiniciar el controlador después de cargar `config.yaml`.
 
+El filesystem también incluye la WebUI oficial de FluidNC. Si el ESP32 no
+puede conectarse a la red configurada, crea el AP `FluidNC` (contraseña
+`12345678`) en `http://192.168.4.1`. Desde **ESP3D Settings > Station** se
+pueden escanear redes y guardar un nuevo SSID y contraseña sin usar USB. El
+modo debe permanecer en `STA>AP` para conservar este portal de recuperación.
+
 Al arrancar por primera vez, FluidNC crea su punto de acceso. Para que los
 assets externos funcionen, configurar el modo Station con las credenciales de
 la red local desde la interfaz de FluidNC.
