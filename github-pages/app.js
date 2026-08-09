@@ -240,7 +240,7 @@ document.body.innerHTML = `
 
 <section id="tab-label" class="tab active"><div class="layout">
   <section class="panel"><h2>Cinta y formato</h2><div class="fields">
-    <div class="field"><label>Ancho de cinta</label><select id="tapePreset"><option value="6">6 mm</option><option value="9">9 mm</option><option value="12" selected>12 mm</option><option value="18">18 mm</option><option value="24">24 mm</option><option value="36">36 mm</option><option value="custom">Otro...</option></select></div>
+    <div class="field"><label>Ancho de cinta</label><select id="tapePreset"><option value="6">6 mm</option><option value="9">9 mm</option><option value="12" selected>12 mm</option><option value="18">18 mm</option><option value="24">24 mm</option><option value="36">36 mm</option><option value="45">45 mm</option><option value="custom">Otro...</option></select></div>
     <div class="field" id="customWidthField" hidden><label>Ancho particular (mm)</label><input id="tapeWidth" type="number" min="4" max="100" step="0.1" value="12"></div>
     <div class="field"><label>Formato</label><select id="labelFormat"><option value="one">Un renglón</option><option value="two">Dos renglones</option></select></div>
   </div><div class="field"><label>Renglón 1</label><input id="line1" maxlength="200" value="Etiqueta"></div><div class="field" id="line2Field" hidden><label>Renglón 2</label><input id="line2" maxlength="200" value="Segundo renglón"></div>
