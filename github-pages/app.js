@@ -214,6 +214,7 @@ class FluidNCClient extends EventTarget {
 }
 
 const VECTOR_FONT = window.LABELER_VECTOR_FONT;
+const OUTLINE_FONTS = window.LabelerOutlineFonts;
 
 const DEFAULT_CONFIG = {
   xStepsPerMm:80, yStepsPerMm:80, xMaxSpeedMmS:40, yMaxSpeedMmS:25,
@@ -242,8 +243,9 @@ document.body.innerHTML = `
     <div class="field"><label>Ancho de cinta</label><select id="tapePreset"><option value="6">6 mm</option><option value="9">9 mm</option><option value="12" selected>12 mm</option><option value="18">18 mm</option><option value="24">24 mm</option><option value="36">36 mm</option><option value="custom">Otro...</option></select></div>
     <div class="field" id="customWidthField" hidden><label>Ancho particular (mm)</label><input id="tapeWidth" type="number" min="4" max="100" step="0.1" value="12"></div>
     <div class="field"><label>Formato</label><select id="labelFormat"><option value="one">Un renglón</option><option value="two">Dos renglones</option></select></div>
-  </div><div class="field"><label>Renglón 1</label><input id="line1" maxlength="40" value="Etiqueta"></div><div class="field" id="line2Field" hidden><label>Renglón 2</label><input id="line2" maxlength="40" value="Segundo renglón"></div>
-  <div class="label-formatting"><div class="field"><label>Fuente vectorial</label><select id="fontFamily"><option value="hershey-roman-simplex">Hershey Sans (1 trazo)</option></select></div><div class="field"><label>Interlineado (mm)</label><input id="lineSpacing" type="number" min="0" max="20" step="0.1" value="1"></div><label class="format-option"><input id="fontBold" type="checkbox"><strong>Negrita</strong></label><label class="format-option"><input id="fontItalic" type="checkbox"><em>Cursiva</em></label><label class="format-option"><input id="fontUnderline" type="checkbox"><u>Subrayado</u></label></div></section>
+  </div><div class="field"><label>Renglón 1</label><input id="line1" maxlength="200" value="Etiqueta"></div><div class="field" id="line2Field" hidden><label>Renglón 2</label><input id="line2" maxlength="200" value="Segundo renglón"></div>
+  <div class="label-formatting"><div class="field"><label>Fuente vectorial</label><select id="fontFamily"><option value="hershey-roman-simplex">Hershey Sans (1 trazo)</option><option value="playwrite-de-sas-guides">Playwrite DE SAS Guides</option><option value="orbitron">Orbitron</option><option value="lobster-two">Lobster Two</option></select><span id="fontStatus" class="muted"></span></div><div class="field"><label>Interlineado (mm)</label><input id="lineSpacing" type="number" min="0" max="20" step="0.1" value="1"></div><label class="format-option"><input id="fontBold" type="checkbox"><strong>Negrita</strong></label><label class="format-option"><input id="fontItalic" type="checkbox"><em>Cursiva</em></label><label class="format-option"><input id="fontUnderline" type="checkbox"><u>Subrayado</u></label></div>
+  <div class="actions"><button id="openIconPicker" type="button" class="secondary">Agregar icono</button></div><div id="iconPicker" class="icon-picker" hidden><div class="icon-picker-head"><input id="iconSearch" class="grow" placeholder="Buscar icono: home, print, warning..."><button id="closeIconPicker" type="button" class="secondary">Cerrar</button></div><p id="iconStatus" class="muted">El catálogo se carga al abrir.</p><div id="iconResults" class="icon-results"></div></div></section>
   <section class="panel"><h2>Vista previa vectorial</h2><div id="tapePreview" class="tape-preview"></div><div class="label-info"><span>Ancho: <strong id="widthInfo">12 mm</strong></span><span>Largo estimado: <strong id="lengthInfo">--</strong></span></div></section>
   <section class="panel wide"><h2>Programa de impresión</h2><textarea id="program" spellcheck="false"></textarea><div class="progress"><div id="progressBar"></div></div><p id="progressText" class="muted">0 / 0 líneas</p><div class="actions"><button id="generate">Generar G-code</button><button id="print">Imprimir etiqueta</button><button id="pause" class="warn">Pausar</button><button id="resume" class="secondary">Continuar</button><button id="reset" class="danger">Detener</button></div></section>
 </div></section>
@@ -282,25 +284,23 @@ document.body.innerHTML = `
 function tapeWidth() { return $('#tapePreset').value === 'custom' ? number('#tapeWidth') : Number($('#tapePreset').value); }
 
 function labelFormatting() {
-  return {
+  const formatting = {
     lineSpacingMm:number('#lineSpacing'),
     bold:$('#fontBold').checked,
     italic:$('#fontItalic').checked,
     underline:$('#fontUnderline').checked
   };
+  const selected = OUTLINE_FONTS.variant($('#fontFamily').value,formatting);
+  return { ...formatting,syntheticBold:formatting.bold&&!selected.nativeBold,syntheticItalic:formatting.italic&&!selected.nativeItalic };
 }
 
-function normalizedCharacters(text) {
-  return [...text.normalize('NFD').replace(/\p{Diacritic}/gu, '')];
+function textGeometry(text,scale,formatting) {
+  return OUTLINE_FONTS.geometry(text,$('#fontFamily').value,formatting,mechanical.glyphSpacingMm/scale,Math.max(0.015,0.06/scale));
 }
 
 function textMetrics(text, scale, formatting) {
-  const normalized = normalizedCharacters(text);
-  const baseWidth = normalized.reduce((width, rawChar, index) => {
-    const glyph = VECTOR_FONT[rawChar] || VECTOR_FONT['?'];
-    return width + glyph.advance * scale + (index ? mechanical.glyphSpacingMm : 0);
-  }, 0);
-  return baseWidth + (formatting.italic ? 1.8*scale : 0) + (formatting.bold ? 0.3*scale : 0);
+  const baseWidth=textGeometry(text,scale,formatting).advance*scale;
+  return baseWidth+(formatting.syntheticItalic ? 1.8*scale : 0)+(formatting.syntheticBold ? 0.3*scale : 0);
 }
 
 function offsetStroke(stroke, distance) {
@@ -314,27 +314,22 @@ function offsetStroke(stroke, distance) {
   });
 }
 
-function styledStrokes(strokes, formatting) {
-  if (!formatting.bold) return strokes;
+function styledStrokes(strokes, bold) {
+  if (!bold) return strokes;
   return strokes.flatMap(stroke => [offsetStroke(stroke,-0.15),stroke,offsetStroke(stroke,0.15)]);
 }
 
 function rowPaths(text, yBottom, scale, xOffset, width, formatting) {
   const paths = [];
-  const boldPadding = formatting.bold ? 0.15*scale : 0;
+  const boldPadding = formatting.syntheticBold ? 0.15*scale : 0;
   const underlineLift = formatting.underline ? 0.8 : 0;
-  let cursor = xOffset+boldPadding;
-  const normalized = normalizedCharacters(text);
-  for (const rawChar of normalized) {
-    const glyph = VECTOR_FONT[rawChar] || VECTOR_FONT['?'];
-    styledStrokes(glyph.strokes,formatting).forEach(stroke => paths.push(stroke.map(([x,y]) => ({
-      x:cursor+(x+(formatting.italic ? y*0.18 : 0))*scale,
-      y:yBottom+(y+underlineLift)*scale
-    }))));
-    cursor += glyph.advance*scale + mechanical.glyphSpacingMm;
-  }
+  const geometry=textGeometry(text,scale,formatting);
+  styledStrokes(geometry.strokes,formatting.syntheticBold).forEach(stroke => paths.push(stroke.map(([x,y]) => ({
+    x:xOffset+boldPadding+(x+(formatting.syntheticItalic ? y*0.18 : 0))*scale,
+    y:yBottom+(y+underlineLift)*scale
+  }))));
   if (formatting.underline) {
-    styledStrokes([[[0,0.15],[(width-2*boldPadding)/scale,0.15]]],formatting).forEach(stroke => paths.push(stroke.map(([x,y]) => ({ x:xOffset+boldPadding+x*scale, y:yBottom+y*scale }))));
+    styledStrokes([[[0,0.15],[(width-2*boldPadding)/scale,0.15]]],formatting.bold).forEach(stroke => paths.push(stroke.map(([x,y]) => ({ x:xOffset+boldPadding+x*scale, y:yBottom+y*scale }))));
   }
   return paths;
 }
@@ -417,6 +412,64 @@ function updatePreview() {
   }
 }
 
+async function ensureSelectedFont() {
+  const formatting=labelFormatting();
+  const familyId=$('#fontFamily').value;
+  const status=$('#fontStatus');
+  const selected=OUTLINE_FONTS.variant(familyId,formatting);
+  if (!selected.url) { status.textContent='Un solo trazo'; updatePreview(); return; }
+  status.textContent='Cargando fuente...';
+  $('#generate').disabled=true;$('#print').disabled=true;
+  try {
+    await OUTLINE_FONTS.ensureFamily(familyId,formatting);
+    status.textContent=selected.nativeBold||selected.nativeItalic ? 'Variante tipográfica real' : 'Contornos vectoriales';
+    updatePreview();
+  } catch (error) {
+    status.textContent='Error al cargar';log(error.message);
+  } finally {
+    $('#generate').disabled=false;$('#print').disabled=false;
+  }
+}
+
+function iconSvg(name) {
+  const geometry=OUTLINE_FONTS.iconGeometry(name,0.12);
+  if (!geometry) return '';
+  const lines=geometry.strokes.map(stroke => `<polyline points="${stroke.map(([x,y]) => `${fmt(x)},${fmt(10-y)}`).join(' ')}"/>`).join('');
+  return `<svg viewBox="0 0 ${fmt(Math.max(geometry.advance,10))} 10" aria-hidden="true">${lines}</svg>`;
+}
+
+function renderIconResults() {
+  const names=OUTLINE_FONTS.iconNames($('#iconSearch').value);
+  const shown=names.slice(0,80);
+  $('#iconStatus').textContent=`${names.length} iconos encontrados${names.length>shown.length ? '; mostrando los primeros 80' : ''}.`;
+  $('#iconResults').innerHTML=shown.map(name => `<button type="button" class="icon-choice" data-icon-name="${name}" title="${name}">${iconSvg(name)}<span>${name.replaceAll('_',' ')}</span></button>`).join('');
+  document.querySelectorAll('[data-icon-name]').forEach(button => button.onclick=()=>insertIcon(button.dataset.iconName));
+}
+
+let activeLabelInput;
+function insertIcon(name) {
+  const input=activeLabelInput || $('#line1');
+  const token=`{${name}}`;
+  const start=input.selectionStart ?? input.value.length;
+  const end=input.selectionEnd ?? start;
+  input.value=input.value.slice(0,start)+token+input.value.slice(end);
+  input.focus();input.setSelectionRange(start+token.length,start+token.length);
+  updatePreview();
+}
+
+async function openIconPicker() {
+  $('#iconPicker').hidden=false;
+  $('#iconStatus').textContent='Cargando el catálogo completo de Material Symbols...';
+  $('#openIconPicker').disabled=true;
+  try {
+    await OUTLINE_FONTS.ensureIcons();
+    renderIconResults();
+    $('#iconSearch').focus();
+  } catch (error) {
+    $('#iconStatus').textContent=`Error: ${error.message}`;
+  } finally { $('#openIconPicker').disabled=false; }
+}
+
 async function loadConfig() {
   try {
     const response = await localFetch('/api/labeler/config');
@@ -452,11 +505,16 @@ document.querySelectorAll('[data-tab]').forEach(button => button.onclick = () =>
   document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.id === `tab-${button.dataset.tab}`));
 });
 
-['#tapePreset','#tapeWidth','#labelFormat','#line1','#line2','#lineSpacing','#fontBold','#fontItalic','#fontUnderline'].forEach(selector => $(selector).addEventListener('input', () => {
+['#tapePreset','#tapeWidth','#labelFormat','#line1','#line2','#lineSpacing','#fontUnderline'].forEach(selector => $(selector).addEventListener('input', () => {
   $('#customWidthField').hidden = $('#tapePreset').value !== 'custom';
   $('#lineSpacing').disabled = $('#labelFormat').value !== 'two';
   updatePreview();
 }));
+['#fontFamily','#fontBold','#fontItalic'].forEach(selector => $(selector).addEventListener('input',ensureSelectedFont));
+['#line1','#line2'].forEach(selector => $(selector).addEventListener('focus',event => { activeLabelInput=event.currentTarget; }));
+$('#openIconPicker').onclick=openIconPicker;
+$('#closeIconPicker').onclick=()=>{ $('#iconPicker').hidden=true; };
+$('#iconSearch').addEventListener('input',renderIconResults);
 
 client.addEventListener('connection', event => {
   const online = event.detail.online;
@@ -551,5 +609,7 @@ $('#configForm').onsubmit = async event => {
   } catch (error) { $('#configMessage').textContent = `Error: ${error.message}`; }
 };
 
+activeLabelInput=$('#line1');
+$('#fontStatus').textContent='Un solo trazo';
 updatePreview();
 connectController();
