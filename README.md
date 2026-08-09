@@ -25,8 +25,9 @@ red Wi-Fi con mDNS habilitado.
 
 La interfaz permite seleccionar cintas de 6, 9, 12, 18, 24 o 36 mm, o ingresar
 un ancho particular. Puede generar etiquetas de uno o dos renglones. El texto
-se convierte en trazos mediante una fuente matricial 5x7 incluida en
-`github-pages/app.js`.
+se convierte en recorridos mediante una fuente vectorial de trazo simple con
+mayúsculas y minúsculas. El editor permite ajustar el interlineado y aplicar
+negrita, cursiva y subrayado tanto a la vista previa como al G-code.
 
 El eje X corresponde al sentido longitudinal de la cinta, Y a su ancho y el eje
 A al servo que acerca o aleja el marcador. Antes de imprimir se muestra el
@@ -37,6 +38,7 @@ guardan en el ESP32:
 
 - ancho seleccionado;
 - formato de uno o dos renglones;
+- interlineado y estilos de texto;
 - textos de la etiqueta;
 - programa G-code generado.
 

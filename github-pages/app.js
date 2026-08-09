@@ -242,7 +242,8 @@ document.body.innerHTML = `
     <div class="field"><label>Ancho de cinta</label><select id="tapePreset"><option value="6">6 mm</option><option value="9">9 mm</option><option value="12" selected>12 mm</option><option value="18">18 mm</option><option value="24">24 mm</option><option value="36">36 mm</option><option value="custom">Otro...</option></select></div>
     <div class="field" id="customWidthField" hidden><label>Ancho particular (mm)</label><input id="tapeWidth" type="number" min="4" max="100" step="0.1" value="12"></div>
     <div class="field"><label>Formato</label><select id="labelFormat"><option value="one">Un renglón</option><option value="two">Dos renglones</option></select></div>
-  </div><div class="field"><label>Renglón 1</label><input id="line1" maxlength="40" value="ETIQUETA"></div><div class="field" id="line2Field" hidden><label>Renglón 2</label><input id="line2" maxlength="40" value="SEGUNDO RENGLON"></div></section>
+  </div><div class="field"><label>Renglón 1</label><input id="line1" maxlength="40" value="Etiqueta"></div><div class="field" id="line2Field" hidden><label>Renglón 2</label><input id="line2" maxlength="40" value="Segundo renglón"></div>
+  <div class="label-formatting"><div class="field"><label>Interlineado (mm)</label><input id="lineSpacing" type="number" min="0" max="20" step="0.1" value="1"></div><label class="format-option"><input id="fontBold" type="checkbox"><strong>Negrita</strong></label><label class="format-option"><input id="fontItalic" type="checkbox"><em>Cursiva</em></label><label class="format-option"><input id="fontUnderline" type="checkbox"><u>Subrayado</u></label></div></section>
   <section class="panel"><h2>Vista previa vectorial</h2><div id="tapePreview" class="tape-preview"></div><div class="label-info"><span>Ancho: <strong id="widthInfo">12 mm</strong></span><span>Largo estimado: <strong id="lengthInfo">--</strong></span></div></section>
   <section class="panel wide"><h2>Programa de impresión</h2><textarea id="program" spellcheck="false"></textarea><div class="progress"><div id="progressBar"></div></div><p id="progressText" class="muted">0 / 0 líneas</p><div class="actions"><button id="generate">Generar G-code</button><button id="print">Imprimir etiqueta</button><button id="pause" class="warn">Pausar</button><button id="resume" class="secondary">Continuar</button><button id="reset" class="danger">Detener</button></div></section>
 </div></section>
@@ -280,22 +281,60 @@ document.body.innerHTML = `
 
 function tapeWidth() { return $('#tapePreset').value === 'custom' ? number('#tapeWidth') : Number($('#tapePreset').value); }
 
-function textMetrics(text, scale) {
-  const normalized = [...text.toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')];
-  return normalized.reduce((width, rawChar, index) => {
+function labelFormatting() {
+  return {
+    lineSpacingMm:number('#lineSpacing'),
+    bold:$('#fontBold').checked,
+    italic:$('#fontItalic').checked,
+    underline:$('#fontUnderline').checked
+  };
+}
+
+function normalizedCharacters(text) {
+  return [...text.normalize('NFD').replace(/\p{Diacritic}/gu, '')];
+}
+
+function textMetrics(text, scale, formatting) {
+  const normalized = normalizedCharacters(text);
+  const baseWidth = normalized.reduce((width, rawChar, index) => {
     const glyph = VECTOR_FONT[rawChar] || VECTOR_FONT['?'];
     return width + glyph.advance * scale + (index ? mechanical.glyphSpacingMm : 0);
   }, 0);
+  return baseWidth + (formatting.italic ? 1.8*scale : 0) + (formatting.bold ? 0.3*scale : 0);
 }
 
-function rowPaths(text, yBottom, scale, xOffset) {
+function offsetStroke(stroke, distance) {
+  return stroke.map((point,index) => {
+    const before = stroke[Math.max(0,index-1)];
+    const after = stroke[Math.min(stroke.length-1,index+1)];
+    const dx = after[0]-before[0];
+    const dy = after[1]-before[1];
+    const length = Math.hypot(dx,dy) || 1;
+    return [point[0]-dy/length*distance,point[1]+dx/length*distance];
+  });
+}
+
+function styledStrokes(strokes, formatting) {
+  if (!formatting.bold) return strokes;
+  return strokes.flatMap(stroke => [offsetStroke(stroke,-0.15),stroke,offsetStroke(stroke,0.15)]);
+}
+
+function rowPaths(text, yBottom, scale, xOffset, width, formatting) {
   const paths = [];
-  let cursor = xOffset;
-  const normalized = text.toUpperCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+  const boldPadding = formatting.bold ? 0.15*scale : 0;
+  const underlineLift = formatting.underline ? 0.8 : 0;
+  let cursor = xOffset+boldPadding;
+  const normalized = normalizedCharacters(text);
   for (const rawChar of normalized) {
     const glyph = VECTOR_FONT[rawChar] || VECTOR_FONT['?'];
-    glyph.strokes.forEach(stroke => paths.push(stroke.map(([x,y]) => ({ x:cursor + x*scale, y:yBottom + y*scale }))));
+    styledStrokes(glyph.strokes,formatting).forEach(stroke => paths.push(stroke.map(([x,y]) => ({
+      x:cursor+(x+(formatting.italic ? y*0.18 : 0))*scale,
+      y:yBottom+(y+underlineLift)*scale
+    }))));
     cursor += glyph.advance*scale + mechanical.glyphSpacingMm;
+  }
+  if (formatting.underline) {
+    styledStrokes([[[0,0.15],[(width-2*boldPadding)/scale,0.15]]],formatting).forEach(stroke => paths.push(stroke.map(([x,y]) => ({ x:xOffset+boldPadding+x*scale, y:yBottom+y*scale }))));
   }
   return paths;
 }
@@ -303,20 +342,21 @@ function rowPaths(text, yBottom, scale, xOffset) {
 function buildLabel() {
   const width = tapeWidth();
   const rows = $('#labelFormat').value === 'two' ? 2 : 1;
+  const formatting = labelFormatting();
   const texts = rows === 2 ? [$('#line1').value, $('#line2').value] : [$('#line1').value];
   if (texts.some(text => !text.trim())) throw new Error('Completá el contenido de todos los renglones.');
   const usable = width - 2*mechanical.tapeMarginMm;
-  const rowGap = rows === 2 ? Math.min(1, usable*0.08) : 0;
+  const rowGap = rows === 2 ? formatting.lineSpacingMm : 0;
   const rowHeight = (usable-rowGap*(rows-1))/rows;
   if (rowHeight <= 1) throw new Error('El margen configurado no deja espacio imprimible.');
-  const scale = rowHeight/10;
-  const widths = texts.map(text => textMetrics(text, scale));
+  const scale = rowHeight/(formatting.underline ? 10.8 : 10);
+  const widths = texts.map(text => textMetrics(text,scale,formatting));
   const labelLength = Math.max(...widths) + 2*mechanical.tapeMarginMm;
   const paths = [];
   texts.forEach((text,index) => {
     const yBottom = mechanical.tapeMarginMm + (rows-1-index)*(rowHeight+rowGap);
     const xOffset = mechanical.tapeMarginMm + (labelLength-widths[index])/2;
-    paths.push(...rowPaths(text,yBottom,scale,xOffset));
+    paths.push(...rowPaths(text,yBottom,scale,xOffset,widths[index],formatting));
   });
 
   const up = servoAxis(mechanical.servoUpAngle);
@@ -363,6 +403,7 @@ function updatePreview() {
   const width = tapeWidth();
   const two = $('#labelFormat').value === 'two';
   $('#line2Field').hidden = !two;
+  $('#lineSpacing').disabled = !two;
   $('#widthInfo').textContent = `${width} mm`;
   try {
     const job = buildLabel();
@@ -411,8 +452,9 @@ document.querySelectorAll('[data-tab]').forEach(button => button.onclick = () =>
   document.querySelectorAll('.tab').forEach(tab => tab.classList.toggle('active', tab.id === `tab-${button.dataset.tab}`));
 });
 
-['#tapePreset','#tapeWidth','#labelFormat','#line1','#line2'].forEach(selector => $(selector).addEventListener('input', () => {
+['#tapePreset','#tapeWidth','#labelFormat','#line1','#line2','#lineSpacing','#fontBold','#fontItalic','#fontUnderline'].forEach(selector => $(selector).addEventListener('input', () => {
   $('#customWidthField').hidden = $('#tapePreset').value !== 'custom';
+  $('#lineSpacing').disabled = $('#labelFormat').value !== 'two';
   updatePreview();
 }));
 
