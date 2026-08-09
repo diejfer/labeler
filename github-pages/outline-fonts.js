@@ -1,7 +1,7 @@
 (() => {
   const families = {
     'hershey-roman-simplex': { label:'Hershey Sans (1 trazo)', type:'stroke' },
-    'playwrite-de-sas-guides': { label:'Playwrite DE SAS Guides', type:'outline', regular:'vendor/google-fonts/PlaywriteDESASGuides-Regular.ttf' },
+    'playwrite-de-sas': { label:'Playwrite DE SAS', type:'outline', connected:true, regular:'vendor/google-fonts/PlaywriteDESAS-wght.ttf' },
     orbitron: { label:'Orbitron', type:'outline', regular:'vendor/google-fonts/Orbitron-wght.ttf' },
     'lobster-two': {
       label:'Lobster Two', type:'outline',
@@ -166,7 +166,10 @@
         glyphData=outlineGlyph(font,glyph,toleranceDesign);previousGlyph=glyph;previousFont=font;
       }
       glyphData.strokes.forEach(stroke => strokes.push(stroke.map(([x,y]) => [cursor+x,y])));
-      cursor+=glyphData.advance+(index<units.length-1 ? spacingDesign : 0);
+      // Connected scripts already carry the joins and spacing designed by the
+      // font. Adding the machine-wide character gap would break the cursive.
+      const characterSpacing=selected.family.connected ? 0 : spacingDesign;
+      cursor+=glyphData.advance+(index<units.length-1 ? characterSpacing : 0);
     });
     return { strokes,advance:cursor,selected };
   }
