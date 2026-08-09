@@ -35,7 +35,7 @@ Todas las licencias están junto a sus assets en `github-pages/vendor`.
 
 ## Aplicación de etiquetas
 
-La interfaz permite seleccionar cintas de 6, 9, 12, 18, 24 o 36 mm, o ingresar
+La interfaz permite seleccionar cintas de 6, 9, 12, 18, 24, 36 o 45 mm, o ingresar
 un ancho particular. Puede generar etiquetas de uno o dos renglones. El texto
 se convierte en recorridos mediante Hershey Roman Simplex, una fuente vectorial
 estándar de trazo simple para plotters, con mayúsculas y minúsculas. También
