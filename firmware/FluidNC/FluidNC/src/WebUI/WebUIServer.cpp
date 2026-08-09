@@ -1455,6 +1455,8 @@ namespace WebUI {
             float    yMaxSpeed    = 25.0f;
             float    xAccel       = 100.0f;
             float    yAccel       = 100.0f;
+            float    xBacklash    = 0.0f;
+            float    yBacklash    = 0.0f;
             float    travelSpeed  = 25.0f;
             float    printSpeed   = 8.0f;
             float    tapeMargin   = 1.5f;
@@ -1476,6 +1478,8 @@ namespace WebUI {
             cfg.yMaxSpeed    = prefs.getFloat("y_speed", cfg.yMaxSpeed);
             cfg.xAccel       = prefs.getFloat("x_accel", cfg.xAccel);
             cfg.yAccel       = prefs.getFloat("y_accel", cfg.yAccel);
+            cfg.xBacklash    = prefs.getFloat("x_backlash", cfg.xBacklash);
+            cfg.yBacklash    = prefs.getFloat("y_backlash", cfg.yBacklash);
             cfg.travelSpeed  = prefs.getFloat("travel", cfg.travelSpeed);
             cfg.printSpeed   = prefs.getFloat("print", cfg.printSpeed);
             cfg.tapeMargin   = prefs.getFloat("margin", cfg.tapeMargin);
@@ -1496,6 +1500,8 @@ namespace WebUI {
             json += ",\"yMaxSpeedMmS\":" + String(cfg.yMaxSpeed, 3);
             json += ",\"xAccelerationMmS2\":" + String(cfg.xAccel, 3);
             json += ",\"yAccelerationMmS2\":" + String(cfg.yAccel, 3);
+            json += ",\"xBacklashMm\":" + String(cfg.xBacklash, 4);
+            json += ",\"yBacklashMm\":" + String(cfg.yBacklash, 4);
             json += ",\"travelSpeedMmS\":" + String(cfg.travelSpeed, 3);
             json += ",\"printSpeedMmS\":" + String(cfg.printSpeed, 3);
             json += ",\"tapeMarginMm\":" + String(cfg.tapeMargin, 3);
@@ -1602,6 +1608,7 @@ namespace WebUI {
         bool valid = labelerArg(request, "xStepsPerMm", cfg.xSteps) && labelerArg(request, "yStepsPerMm", cfg.ySteps) &&
                      labelerArg(request, "xMaxSpeedMmS", cfg.xMaxSpeed) && labelerArg(request, "yMaxSpeedMmS", cfg.yMaxSpeed) &&
                      labelerArg(request, "xAccelerationMmS2", cfg.xAccel) && labelerArg(request, "yAccelerationMmS2", cfg.yAccel) &&
+                     labelerArg(request, "xBacklashMm", cfg.xBacklash) && labelerArg(request, "yBacklashMm", cfg.yBacklash) &&
                      labelerArg(request, "travelSpeedMmS", cfg.travelSpeed) && labelerArg(request, "printSpeedMmS", cfg.printSpeed) &&
                      labelerArg(request, "tapeMarginMm", cfg.tapeMargin) && labelerArg(request, "glyphSpacingMm", cfg.glyphSpacing) &&
                      labelerArg(request, "servoUpAngle", cfg.servoUp) && labelerArg(request, "servoDownAngle", cfg.servoDown) &&
@@ -1610,6 +1617,7 @@ namespace WebUI {
         valid = valid && cfg.xSteps >= 0.01f && cfg.xSteps <= 100000.0f && cfg.ySteps >= 0.01f && cfg.ySteps <= 100000.0f &&
                 cfg.xMaxSpeed > 0.0f && cfg.xMaxSpeed <= 1000.0f && cfg.yMaxSpeed > 0.0f && cfg.yMaxSpeed <= 1000.0f &&
                 cfg.xAccel > 0.0f && cfg.xAccel <= 100000.0f && cfg.yAccel > 0.0f && cfg.yAccel <= 100000.0f &&
+                cfg.xBacklash >= 0.0f && cfg.xBacklash <= 10.0f && cfg.yBacklash >= 0.0f && cfg.yBacklash <= 10.0f &&
                 cfg.travelSpeed > 0.0f && cfg.travelSpeed <= 1000.0f && cfg.printSpeed > 0.0f && cfg.printSpeed <= 1000.0f &&
                 cfg.tapeMargin >= 0.0f && cfg.tapeMargin <= 50.0f && cfg.glyphSpacing >= 0.0f && cfg.glyphSpacing <= 20.0f &&
                 cfg.servoUp <= 180 && cfg.servoDown <= 180 && cfg.servoDelayMs <= 5000;
@@ -1630,6 +1638,8 @@ namespace WebUI {
         prefs.putFloat("y_speed", cfg.yMaxSpeed);
         prefs.putFloat("x_accel", cfg.xAccel);
         prefs.putFloat("y_accel", cfg.yAccel);
+        prefs.putFloat("x_backlash", cfg.xBacklash);
+        prefs.putFloat("y_backlash", cfg.yBacklash);
         prefs.putFloat("travel", cfg.travelSpeed);
         prefs.putFloat("print", cfg.printSpeed);
         prefs.putFloat("margin", cfg.tapeMargin);
