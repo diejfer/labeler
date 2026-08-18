@@ -1449,8 +1449,8 @@ namespace WebUI {
 
     namespace {
         struct LabelerConfig {
-            float    xSteps       = 80.0f;
-            float    ySteps       = 80.0f;
+            float    xSteps       = 10.1859f;
+            float    ySteps       = 213.3333f;
             float    xMaxSpeed    = 40.0f;
             float    yMaxSpeed    = 25.0f;
             float    xAccel       = 100.0f;

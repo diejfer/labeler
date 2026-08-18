@@ -115,13 +115,13 @@ class FluidNCClient extends EventTarget {
     this.run(`G91\nG0 A${delta} F3600\nG90`, 'manual');
   }
 
-  async jogAxis(axis, steps, stepsPerMm, maxSpeedMmS) {
+  async jogAxis(axis, distanceMm, maxSpeedMmS) {
     if (!this.online) throw new Error('El controlador no está conectado.');
     if (this.pending || this.queue.length) throw new Error('Ya hay un envío en curso.');
     const status = await this.pollStatus();
     if (status.state !== 'Idle') throw new Error(`La máquina está en estado ${status.state}.`);
-    if (!Number.isFinite(stepsPerMm) || stepsPerMm <= 0) throw new Error('Los pasos por milímetro deben ser mayores que cero.');
-    const distance = fmt(steps / stepsPerMm);
+    if (!Number.isFinite(distanceMm) || distanceMm === 0) throw new Error('La distancia debe ser distinta de cero.');
+    const distance = fmt(distanceMm);
     const feed = fmt(Math.min(maxSpeedMmS, 10) * 60);
     this.run(`G91\nG1 ${axis}${distance} F${feed}\nG90`, 'manual');
   }
@@ -217,7 +217,7 @@ const VECTOR_FONT = window.LABELER_VECTOR_FONT;
 const OUTLINE_FONTS = window.LabelerOutlineFonts;
 
 const DEFAULT_CONFIG = {
-  xStepsPerMm:80, yStepsPerMm:80, xMaxSpeedMmS:40, yMaxSpeedMmS:25,
+  xStepsPerMm:10.1859, yStepsPerMm:213.3333, xMaxSpeedMmS:40, yMaxSpeedMmS:25,
   xAccelerationMmS2:100, yAccelerationMmS2:100, travelSpeedMmS:25,
   xBacklashMm:0, yBacklashMm:0, printSpeedMmS:8, tapeMarginMm:1.5, glyphSpacingMm:1,
   servoUpAngle:90, servoDownAngle:35, servoDelayMs:180
@@ -236,7 +236,8 @@ const servoAxis = angle => fmt(angle - 180);
 
 document.body.innerHTML = `
 <div class="shell"><header class="topbar"><div><h1>Impresora de etiquetas</h1><span class="muted">Control FluidNC</span></div><div class="connection"><span id="dot" class="dot"></span><span id="connectionText">Desconectado</span><button id="connect" class="secondary">Conectar</button></div></header>
-<nav class="tabs"><button data-tab="label" class="active">Etiqueta</button><button data-tab="manual">Control manual</button><button data-tab="config">Configuración</button></nav>
+<nav class="tabs"><button data-tab="label" class="active">Etiqueta</button><button data-tab="config">Configuración</button></nav>
+<p id="appMessage" class="muted app-message" role="status" aria-live="polite"></p>
 
 <section id="tab-label" class="tab active"><div class="layout">
   <section class="panel"><h2>Cinta y formato</h2><div class="fields">
@@ -250,21 +251,16 @@ document.body.innerHTML = `
   <section class="panel wide"><h2>Programa de impresión</h2><textarea id="program" spellcheck="false"></textarea><div class="progress"><div id="progressBar"></div></div><p id="progressText" class="muted">0 / 0 líneas</p><div class="actions"><button id="generate">Generar G-code</button><button id="print">Imprimir etiqueta</button><button id="pause" class="warn">Pausar</button><button id="resume" class="secondary">Continuar</button><button id="reset" class="danger">Detener</button></div></section>
 </div></section>
 
-<section id="tab-manual" class="tab"><div class="layout">
-  <section class="panel wide"><h2>Estado</h2><div class="status-grid"><div class="metric"><span>Estado</span><strong id="machineState">--</strong></div><div class="metric"><span>X</span><strong id="posX">0 mm</strong></div><div class="metric"><span>Y</span><strong id="posY">0 mm</strong></div><div class="metric"><span>Servo</span><strong id="posA">--</strong></div></div><div class="actions"><button id="unlock" class="secondary">Desbloquear ($X)</button><button id="penUp" class="secondary">Alejar marcador</button><button id="penDown" class="warn">Acercar marcador</button></div></section>
-  <section class="panel wide"><h2>Consola G-code</h2><div id="console" class="console"></div><div class="actions"><input id="manual" placeholder="G0 X10 Y5" class="grow"><button id="sendManual" class="secondary">Enviar</button></div></section>
-</div></section>
-
 <section id="tab-config" class="tab"><form id="configForm" class="panel config-panel"><h2>Configuración mecánica persistente</h2><p class="muted">Estos valores se guardan en la memoria NVS del ESP32. Los textos y el formato de etiqueta no se guardan.</p><div class="config-grid">
   <fieldset><legend>Motor X — avance longitudinal</legend>
     <div class="field"><label>Posición actual</label><strong id="motorXCalibrationPosition">--</strong></div>
-    <div class="actions stepper-jog"><button type="button" data-axis-jog="X" data-steps="-100" class="secondary">-100 pasos</button><button type="button" data-axis-jog="X" data-steps="-10" class="secondary">-10</button><button type="button" data-axis-jog="X" data-steps="-1" class="secondary">-1</button><button type="button" data-axis-jog="X" data-steps="1" class="secondary">+1</button><button type="button" data-axis-jog="X" data-steps="10" class="secondary">+10</button><button type="button" data-axis-jog="X" data-steps="100" class="secondary">+100 pasos</button></div>
+    <div class="actions stepper-jog"><button type="button" data-axis-jog="X" data-mm="-10" class="secondary">−10 mm</button><button type="button" data-axis-jog="X" data-mm="-1" class="secondary">−1 mm</button><button type="button" data-axis-jog="X" data-mm="-0.1" class="secondary">−0,1 mm</button><button type="button" data-axis-jog="X" data-mm="0.1" class="secondary">+0,1 mm</button><button type="button" data-axis-jog="X" data-mm="1" class="secondary">+1 mm</button><button type="button" data-axis-jog="X" data-mm="10" class="secondary">+10 mm</button></div>
     <div class="actions"><button type="button" data-axis-zero="X" class="secondary">Poner X en cero</button></div>
     <div class="field"><label>Pasos por milímetro</label><input name="xStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="xMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="xAccelerationMmS2" type="number" min="0.1" step="0.1"></div><div class="field"><label>Holgura / backlash (mm)</label><input name="xBacklashMm" type="number" min="0" max="10" step="0.001"><span class="muted">Usá 0 para desactivar la compensación.</span></div>
   </fieldset>
   <fieldset><legend>Motor Y — ancho de cinta</legend>
     <div class="field"><label>Posición actual</label><strong id="motorYCalibrationPosition">--</strong></div>
-    <div class="actions stepper-jog"><button type="button" data-axis-jog="Y" data-steps="-100" class="secondary">-100 pasos</button><button type="button" data-axis-jog="Y" data-steps="-10" class="secondary">-10</button><button type="button" data-axis-jog="Y" data-steps="-1" class="secondary">-1</button><button type="button" data-axis-jog="Y" data-steps="1" class="secondary">+1</button><button type="button" data-axis-jog="Y" data-steps="10" class="secondary">+10</button><button type="button" data-axis-jog="Y" data-steps="100" class="secondary">+100 pasos</button></div>
+    <div class="actions stepper-jog"><button type="button" data-axis-jog="Y" data-mm="-10" class="secondary">−10 mm</button><button type="button" data-axis-jog="Y" data-mm="-1" class="secondary">−1 mm</button><button type="button" data-axis-jog="Y" data-mm="-0.1" class="secondary">−0,1 mm</button><button type="button" data-axis-jog="Y" data-mm="0.1" class="secondary">+0,1 mm</button><button type="button" data-axis-jog="Y" data-mm="1" class="secondary">+1 mm</button><button type="button" data-axis-jog="Y" data-mm="10" class="secondary">+10 mm</button></div>
     <div class="actions"><button type="button" data-axis-zero="Y" class="secondary">Poner Y en cero</button></div>
     <div class="field"><label>Pasos por milímetro</label><input name="yStepsPerMm" type="number" min="0.01" step="0.01"></div><div class="field"><label>Velocidad máxima (mm/s)</label><input name="yMaxSpeedMmS" type="number" min="0.1" step="0.1"></div><div class="field"><label>Aceleración (mm/s²)</label><input name="yAccelerationMmS2" type="number" min="0.1" step="0.1"></div><div class="field"><label>Holgura / backlash (mm)</label><input name="yBacklashMm" type="number" min="0" max="10" step="0.001"><span class="muted">Se aplica cuando el eje Y invierte el sentido.</span></div>
   </fieldset>
@@ -495,9 +491,9 @@ function runtimeConfigGcode() {
 }
 
 const log = text => {
-  const box = $('#console');
-  box.textContent += `${new Date().toLocaleTimeString()} ${text}\n`;
-  box.scrollTop = box.scrollHeight;
+  console.info(text);
+  const message = $('#appMessage');
+  if (message) message.textContent = text;
 };
 
 document.querySelectorAll('[data-tab]').forEach(button => button.onclick = () => {
@@ -525,14 +521,9 @@ client.addEventListener('connection', event => {
 client.addEventListener('log', event => log(event.detail.text));
 client.addEventListener('status', event => {
   const status = event.detail;
-  $('#machineState').textContent = status.state;
-  $('#machineState').className = status.state === 'Idle' ? 'state-idle' : 'state-run';
-  $('#posX').textContent = `${(status.positions[0] ?? 0).toFixed(2)} mm`;
-  $('#posY').textContent = `${(status.positions[1] ?? 0).toFixed(2)} mm`;
   $('#motorXCalibrationPosition').textContent = `${(status.positions[0] ?? 0).toFixed(3)} mm`;
   $('#motorYCalibrationPosition').textContent = `${(status.positions[1] ?? 0).toFixed(3)} mm`;
   const a = status.positions[3];
-  $('#posA').textContent = Number.isFinite(a) ? `${(a+180).toFixed(1)}°` : '--';
   $('#servoCalibrationPosition').textContent = Number.isFinite(a) ? `${(a+180).toFixed(1)}°` : '--';
 });
 client.addEventListener('progress', event => {
@@ -558,19 +549,15 @@ $('#print').onclick = () => { try { const job=buildLabel(); $('#program').value=
 $('#pause').onclick = () => client.action('pause').catch(error => log(error.message));
 $('#resume').onclick = () => client.action('resume').catch(error => log(error.message));
 $('#reset').onclick = () => client.cancel();
-$('#unlock').onclick = () => { try { client.run('$X','manual'); } catch(error) { log(error.message); } };
-$('#penUp').onclick = () => client.moveServo(mechanical.servoUpAngle).catch(error => log(error.message));
-$('#penDown').onclick = () => client.moveServo(mechanical.servoDownAngle).catch(error => log(error.message));
 document.querySelectorAll('[data-servo-jog]').forEach(button => button.onclick = () => {
   client.jogServo(Number(button.dataset.servoJog)).catch(error => log(error.message));
 });
 document.querySelectorAll('[data-axis-jog]').forEach(button => button.onclick = () => {
   const axis = button.dataset.axisJog;
   const prefix = axis.toLowerCase();
-  const steps = Number(button.dataset.steps);
-  const stepsPerMm = number(`[name="${prefix}StepsPerMm"]`);
+  const distanceMm = Number(button.dataset.mm);
   const maxSpeed = number(`[name="${prefix}MaxSpeedMmS"]`);
-  client.jogAxis(axis, steps, stepsPerMm, maxSpeed).catch(error => log(error.message));
+  client.jogAxis(axis, distanceMm, maxSpeed).catch(error => log(error.message));
 });
 document.querySelectorAll('[data-axis-zero]').forEach(button => button.onclick = () => {
   client.zeroAxis(button.dataset.axisZero).catch(error => log(error.message));
@@ -587,9 +574,6 @@ $('#captureServoDown').onclick = () => {
 };
 $('#testServoUp').onclick = () => client.moveServo(number('[name="servoUpAngle"]')).catch(error => log(error.message));
 $('#testServoDown').onclick = () => client.moveServo(number('[name="servoDownAngle"]')).catch(error => log(error.message));
-$('#sendManual').onclick = () => { try { client.run($('#manual').value,'manual'); $('#manual').value=''; } catch(error) { log(error.message); } };
-$('#manual').onkeydown = event => { if (event.key === 'Enter') $('#sendManual').click(); };
-
 $('#configForm').onsubmit = async event => {
   event.preventDefault();
   const formData = new FormData(event.currentTarget);
