@@ -1,9 +1,10 @@
 name: "Labeler XY + Servo"
 board: "ESP32 DevKit V1"
 
-# Configuracion inicial segura para pruebas:
-# 1 unidad de G-code equivale a 1 pulso STEP. Cuando se conozca la
-# transmision, reemplazar steps_per_mm por el valor mecanico real.
+# Relacion mecanica del diseno compartido:
+# Motores de 200 pasos/vuelta, A4988 a 1/16 de paso (3200 pulsos/vuelta).
+# X: rodillo de 100 mm de diametro -> 3200 / (pi * 100) = 10.1859 pasos/mm.
+# Y: avance de 15 mm/vuelta -> 3200 / 15 = 213.3333 pasos/mm.
 stepping:
   engine: RMT
   # Libera X e Y inmediatamente cuando termina el movimiento.
@@ -16,7 +17,7 @@ axes:
   shared_stepper_disable_pin: NO_PIN
 
   x:
-    steps_per_mm: 1.000
+    steps_per_mm: 10.1859
     max_rate_mm_per_min: 12000.000
     acceleration_mm_per_sec2: 200.000
     max_travel_mm: 1000000.000
@@ -30,12 +31,12 @@ axes:
       hard_limits: false
       pulloff_mm: 1.000
       stepstick:
-        step_pin: gpio.26
-        direction_pin: gpio.27
-        disable_pin: gpio.25:high
+        step_pin: gpio.27
+        direction_pin: gpio.26
+        disable_pin: gpio.14:high
 
   y:
-    steps_per_mm: 1.000
+    steps_per_mm: 213.3333
     max_rate_mm_per_min: 12000.000
     acceleration_mm_per_sec2: 200.000
     max_travel_mm: 1000000.000
@@ -49,9 +50,9 @@ axes:
       hard_limits: false
       pulloff_mm: 1.000
       stepstick:
-        step_pin: gpio.32
-        direction_pin: gpio.33
-        disable_pin: gpio.14:high
+        step_pin: gpio.33
+        direction_pin: gpio.32
+        disable_pin: gpio.25:high
 
   # FluidNC representa el recorrido de un eje sin homing entre -max_travel
   # y 0. La interfaz traduce 0..180 grados a A-180..A0.

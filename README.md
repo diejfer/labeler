@@ -73,16 +73,15 @@ impresión, margen, separación de caracteres, posiciones del servo y espera del
 servo.
 
 Al abrir una conexión, el cliente aplica la parametría persistente a los ejes X
-e Y mediante los ajustes de ejecución de FluidNC. El archivo YAML conserva
-valores iniciales conservadores para que la máquina no pueda arrancar con una
-calibración mecánica desconocida.
+e Y mediante los ajustes de ejecución de FluidNC. El archivo YAML y los valores
+predeterminados de la aplicación usan la relación mecánica documentada debajo.
 
 ## Pines
 
 | Dispositivo | STEP/PWM | DIR | ENABLE |
 |---|---:|---:|---:|
-| Motor X | GPIO26 | GPIO27 | GPIO25 |
-| Motor Y | GPIO32 | GPIO33 | GPIO14 |
+| Motor X | GPIO27 | GPIO26 | GPIO14 |
+| Motor Y | GPIO33 | GPIO32 | GPIO25 |
 | Servo A | GPIO13 | - | - |
 
 Los dos A4988 y el servo deben compartir GND con el ESP32. El servo debe usar
@@ -94,12 +93,26 @@ servo permanece energizado para conservar el marcador en la posición alejada.
 
 ## Calibración inicial
 
-El YAML inicial usa `steps_per_mm: 1`. Al conectarse la aplicación, reemplaza
-esos valores en memoria con la configuración persistente. Para calcularlos:
+La relación mecánica documentada presupone motores de 200 pasos por vuelta y
+los tres pines MS de cada A4988 en 3,3 V, es decir, 1/16 de paso y 3200 pulsos
+por vuelta. Los valores predeterminados son:
+
+| Eje | Transmisión | Pasos/mm | Pasos/cm |
+|---|---|---:|---:|
+| X | Rodillo de diámetro fijo 100 mm | 10,1859 | 101,859 |
+| Y | Avance lineal de 15 mm por vuelta | 213,3333 | 2133,333 |
+
+Los cálculos usados son `3200 / (π × 100)` para X y `3200 / 15` para Y. Al
+conectarse, la aplicación aplica los valores persistentes de NVS sobre la
+configuración activa de FluidNC. Para recalibrarlos con medidas reales:
 
 ```text
 steps_per_mm = pasos_motor_por_vuelta * micropasos / avance_mm_por_vuelta
 ```
+
+La pestaña **Configuración** permite probar ambos ejes mediante desplazamientos
+relativos de `0,1`, `1` y `10 mm` en los dos sentidos. La interfaz ya no expone
+una consola ni una página de control manual.
 
 Actualizar luego `max_rate_mm_per_min`, `acceleration_mm_per_sec2` y
 `max_travel_mm` con valores reales de la máquina.
@@ -133,9 +146,10 @@ Reiniciar el controlador después de cargar `config.yaml`.
 
 El filesystem también incluye la WebUI oficial de FluidNC. Si el ESP32 no
 puede conectarse a la red configurada, crea el AP `FluidNC` (contraseña
-`12345678`) en `http://192.168.4.1`. Desde **ESP3D Settings > Station** se
-pueden escanear redes y guardar un nuevo SSID y contraseña sin usar USB. El
-modo debe permanecer en `STA>AP` para conservar este portal de recuperación.
+`12345678`) en `http://192.168.4.1`. La página
+`http://192.168.4.1/wifi.html` permite escanear redes y guardar un nuevo SSID
+y contraseña sin usar USB. Conserva el modo `STA>AP` para mantener este portal
+de recuperación cuando falle la conexión configurada.
 
 Al arrancar por primera vez, FluidNC crea su punto de acceso. Para que los
 assets externos funcionen, configurar el modo Station con las credenciales de
