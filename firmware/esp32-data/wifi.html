@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Configurar Wi-Fi · Labeler</title>
+  <style>
+    :root{color-scheme:dark;--bg:#09111f;--card:#131f32;--line:#293b55;--text:#f2f6fc;--muted:#9fb0c8;--blue:#4da3ff;--green:#42d392;--red:#ff6b79}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at top,#182a46,var(--bg) 55%);color:var(--text);font:16px system-ui,-apple-system,Segoe UI,sans-serif}
+    main{width:min(620px,calc(100% - 32px));margin:0 auto;padding:42px 0}h1{font-size:clamp(1.7rem,6vw,2.35rem);margin:0 0 8px}p{color:var(--muted);line-height:1.5}
+    .card{margin-top:24px;padding:24px;background:color-mix(in srgb,var(--card) 94%,transparent);border:1px solid var(--line);border-radius:18px;box-shadow:0 20px 70px #0006}
+    label{display:block;margin:18px 0 7px;font-weight:650}input,select,button{width:100%;border-radius:11px;border:1px solid var(--line);padding:13px 14px;font:inherit}
+    input,select{background:#0c1728;color:var(--text);outline:none}input:focus,select:focus{border-color:var(--blue);box-shadow:0 0 0 3px #4da3ff25}
+    button{border:0;background:var(--blue);color:#061321;font-weight:800;cursor:pointer}button.secondary{background:#243750;color:var(--text)}button:disabled{opacity:.55;cursor:wait}
+    .row{display:grid;grid-template-columns:1fr auto;gap:10px}.row button{width:auto}.actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:24px}
+    .status{display:none;margin-top:18px;padding:13px 15px;border-radius:11px;white-space:pre-wrap}.status.show{display:block}.status.ok{background:#123c31;color:#9af2ce}.status.error{background:#4a1f29;color:#ffc0c7}.status.info{background:#183453;color:#bcdcff}
+    small{display:block;color:var(--muted);margin-top:8px;line-height:1.45}.back{display:inline-block;margin-top:22px;color:#a8d1ff;text-decoration:none}
+    @media(max-width:480px){main{padding-top:24px}.card{padding:18px}.actions{grid-template-columns:1fr}.row{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Configurar Wi-Fi</h1>
+  <p>Conectá la etiquetadora a tu red. Si esa conexión falla, el punto de acceso <strong>FluidNC</strong> seguirá disponible como recuperación.</p>
+  <section class="card">
+    <form id="wifiForm">
+      <label for="ssid">Red Wi-Fi</label>
+      <div class="row">
+        <select id="ssid"><option value="">Seleccionar o escribir manualmente…</option></select>
+        <button id="scan" class="secondary" type="button">Buscar redes</button>
+      </div>
+      <input id="manualSsid" maxlength="32" autocomplete="off" placeholder="SSID manual" aria-label="SSID manual">
+      <small>FluidNC funciona con redes de 2,4 GHz. El nombre distingue mayúsculas y minúsculas.</small>
+
+      <label for="password">Contraseña</label>
+      <input id="password" type="password" maxlength="64" autocomplete="new-password" placeholder="Contraseña de la red">
+      <small>La contraseña se envía solamente al ESP32 y se guarda en su memoria NVS; esta página no la almacena.</small>
+
+      <div class="actions">
+        <button id="save" type="submit">Guardar y reiniciar</button>
+        <button id="showPassword" class="secondary" type="button">Mostrar contraseña</button>
+      </div>
+    </form>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+  </section>
+  <a class="back" href="/">← Volver al panel de FluidNC</a>
+</main>
+<script>
+  const $=id=>document.getElementById(id);
+  const status=(text,type='info')=>{$('status').textContent=text;$('status').className=`status show ${type}`};
+  const command=async value=>{
+    const response=await fetch(`/command?commandText=${encodeURIComponent(value)}`,{cache:'no-store'});
+    const text=await response.text();
+    if(!response.ok) throw new Error(text||`Error HTTP ${response.status}`);
+    return text.trim();
+  };
+  async function scan(){
+    $('scan').disabled=true;status('Buscando redes…');
+    try{
+      const raw=await command('[ESP410]json=yes');
+      const data=JSON.parse(raw);
+      const networks=(data.data||data.AP_LIST||[]).filter(n=>n.SSID).sort((a,b)=>(b.SIGNAL||0)-(a.SIGNAL||0));
+      $('ssid').innerHTML='<option value="">Seleccionar o escribir manualmente…</option>';
+      [...new Map(networks.map(n=>[n.SSID,n])).values()].forEach(n=>{
+        const option=document.createElement('option');option.value=n.SSID;
+        option.textContent=`${n.SSID} (${n.SIGNAL ?? '?'}%)${n.IS_PROTECTED?' 🔒':''}`;$('ssid').append(option);
+      });
+      status(networks.length?`Se encontraron ${networks.length} redes.`:'No se encontraron redes. Podés ingresar el SSID manualmente.',networks.length?'ok':'info');
+    }catch(error){status(`No se pudo escanear: ${error.message}`,'error')}finally{$('scan').disabled=false}
+  }
+  $('ssid').addEventListener('change',()=>{if($('ssid').value)$('manualSsid').value=$('ssid').value});
+  $('scan').addEventListener('click',scan);
+  $('showPassword').addEventListener('click',()=>{const visible=$('password').type==='text';$('password').type=visible?'password':'text';$('showPassword').textContent=visible?'Mostrar contraseña':'Ocultar contraseña'});
+  $('wifiForm').addEventListener('submit',async event=>{
+    event.preventDefault();const ssid=$('manualSsid').value.trim()||$('ssid').value;const password=$('password').value;
+    if(!ssid)return status('Ingresá o seleccioná el nombre de una red.','error');
+    if(new TextEncoder().encode(ssid).length>32)return status('El SSID no puede superar 32 bytes.','error');
+    $('save').disabled=true;status('Guardando la configuración… No desconectes el ESP32.');
+    try{
+      await command(`[ESP100]${ssid}`);
+      await command(`[ESP101]${password}`);
+      await command('[ESP116]3');
+      status(`Configuración guardada para “${ssid}”. El ESP32 se reiniciará. Conectá nuevamente tu dispositivo a esa red; si no puede ingresar, volverá a crear el AP FluidNC.`,'ok');
+      setTimeout(()=>command('[ESP444]RESTART').catch(()=>{}),900);
+    }catch(error){status(`No se pudo guardar: ${error.message}`,'error');$('save').disabled=false}
+  });
+  scan();
+</script>
+</body>
+</html>
